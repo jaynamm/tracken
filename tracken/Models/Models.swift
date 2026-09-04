@@ -5,7 +5,7 @@
 
 import Foundation
 
-nonisolated enum AIProvider: String, CaseIterable, Identifiable {
+nonisolated enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     case codex
     case anthropic
 
@@ -33,17 +33,18 @@ nonisolated enum AIProvider: String, CaseIterable, Identifiable {
     }
 }
 
-nonisolated enum ProviderAuthentication: Equatable {
+nonisolated enum ProviderAuthentication: Equatable, Sendable {
     case codexCLI
     case apiKey(label: String)
 }
 
-nonisolated struct DailyUsage: Identifiable, Equatable {
+nonisolated struct DailyUsage: Identifiable, Equatable, Sendable {
     let date: Date
     let inputTokens: Int?
     let outputTokens: Int?
     let totalTokens: Int
     let estimatedCostUSD: Double?
+    let modelUsage: [ModelUsage]
 
     var id: Date { date }
     var hasDetailedBreakdown: Bool { inputTokens != nil && outputTokens != nil }
@@ -52,28 +53,38 @@ nonisolated struct DailyUsage: Identifiable, Equatable {
         date: Date,
         inputTokens: Int,
         outputTokens: Int,
-        estimatedCostUSD: Double? = nil
+        estimatedCostUSD: Double? = nil,
+        modelUsage: [ModelUsage] = []
     ) {
         self.date = date
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
         totalTokens = inputTokens + outputTokens
         self.estimatedCostUSD = estimatedCostUSD
+        self.modelUsage = modelUsage
     }
 
-    init(date: Date, totalTokens: Int, estimatedCostUSD: Double? = nil) {
+    init(
+        date: Date,
+        totalTokens: Int,
+        estimatedCostUSD: Double? = nil,
+        modelUsage: [ModelUsage] = []
+    ) {
         self.date = date
         inputTokens = nil
         outputTokens = nil
         self.totalTokens = totalTokens
         self.estimatedCostUSD = estimatedCostUSD
+        self.modelUsage = modelUsage
     }
 }
 
-nonisolated struct ModelUsage: Identifiable, Equatable {
+nonisolated struct ModelUsage: Identifiable, Equatable, Sendable {
     let modelName: String
     let inputTokens: Int?
     let outputTokens: Int?
+    let cachedInputTokens: Int
+    let cacheWriteInputTokens: Int
     let totalTokens: Int
     let estimatedCostUSD: Double?
 
@@ -83,11 +94,15 @@ nonisolated struct ModelUsage: Identifiable, Equatable {
         modelName: String,
         inputTokens: Int,
         outputTokens: Int,
+        cachedInputTokens: Int = 0,
+        cacheWriteInputTokens: Int = 0,
         estimatedCostUSD: Double? = nil
     ) {
         self.modelName = modelName
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
+        self.cachedInputTokens = cachedInputTokens
+        self.cacheWriteInputTokens = cacheWriteInputTokens
         totalTokens = inputTokens + outputTokens
         self.estimatedCostUSD = estimatedCostUSD
     }
@@ -96,28 +111,30 @@ nonisolated struct ModelUsage: Identifiable, Equatable {
         self.modelName = modelName
         inputTokens = nil
         outputTokens = nil
+        cachedInputTokens = 0
+        cacheWriteInputTokens = 0
         self.totalTokens = totalTokens
         self.estimatedCostUSD = estimatedCostUSD
     }
 }
 
-nonisolated struct ProviderAccount: Equatable {
+nonisolated struct ProviderAccount: Equatable, Sendable {
     let email: String?
     let planName: String?
 }
 
-nonisolated struct CodexRateLimit: Equatable {
+nonisolated struct CodexRateLimit: Equatable, Sendable {
     let usedPercent: Double
     let windowDurationMinutes: Int
     let resetsAt: Date?
 }
 
-nonisolated enum UsageGranularity: Equatable {
+nonisolated enum UsageGranularity: Equatable, Sendable {
     case aggregate
     case inputOutput
 }
 
-nonisolated struct TokenUsage: Identifiable, Equatable {
+nonisolated struct TokenUsage: Identifiable, Equatable, Sendable {
     let provider: AIProvider
     let daily: [DailyUsage]
     let modelUsage: [ModelUsage]
@@ -172,24 +189,46 @@ nonisolated struct TokenUsage: Identifiable, Equatable {
 
             let entries = usageByDay[date] ?? []
             let costs = entries.compactMap(\.estimatedCostUSD)
-            let estimatedCost = costs.isEmpty
-                ? (estimatedCostUSD == nil ? nil : 0)
-                : costs.reduce(0, +)
+            let estimatedCost = costs.isEmpty ? nil : costs.reduce(0, +)
+            let modelUsage = Self.aggregateModelUsage(entries.flatMap(\.modelUsage))
             if hasDetailedBreakdown {
                 return DailyUsage(
                     date: date,
                     inputTokens: entries.compactMap(\.inputTokens).reduce(0, +),
                     outputTokens: entries.compactMap(\.outputTokens).reduce(0, +),
-                    estimatedCostUSD: estimatedCost
+                    estimatedCostUSD: estimatedCost,
+                    modelUsage: modelUsage
                 )
             }
 
             return DailyUsage(
                 date: date,
                 totalTokens: entries.reduce(0) { $0 + $1.totalTokens },
-                estimatedCostUSD: estimatedCost
+                estimatedCostUSD: estimatedCost,
+                modelUsage: modelUsage
             )
         }
+    }
+
+    nonisolated static func aggregateModelUsage(_ rows: [ModelUsage]) -> [ModelUsage] {
+        Dictionary(grouping: rows, by: \.modelName)
+            .map { modelName, entries in
+                let costs = entries.compactMap(\.estimatedCostUSD)
+                return ModelUsage(
+                    modelName: modelName,
+                    inputTokens: entries.compactMap(\.inputTokens).reduce(0, +),
+                    outputTokens: entries.compactMap(\.outputTokens).reduce(0, +),
+                    cachedInputTokens: entries.reduce(0) { $0 + $1.cachedInputTokens },
+                    cacheWriteInputTokens: entries.reduce(0) { $0 + $1.cacheWriteInputTokens },
+                    estimatedCostUSD: costs.isEmpty ? nil : costs.reduce(0, +)
+                )
+            }
+            .sorted {
+                if $0.totalTokens == $1.totalTokens {
+                    return $0.modelName < $1.modelName
+                }
+                return $0.totalTokens > $1.totalTokens
+            }
     }
 
     var last14Days: [DailyUsage] { recentDays(count: 14) }
@@ -198,7 +237,7 @@ nonisolated struct TokenUsage: Identifiable, Equatable {
     var last14DaysTotalTokens: Int { last14Days.reduce(0) { $0 + $1.totalTokens } }
 }
 
-nonisolated enum ConnectionStatus: Equatable {
+nonisolated enum ConnectionStatus: Equatable, Sendable {
     case notConnected
     case connecting
     case connected
@@ -210,7 +249,7 @@ nonisolated enum ConnectionStatus: Equatable {
     }
 }
 
-nonisolated struct ProviderState: Equatable {
+nonisolated struct ProviderState: Equatable, Sendable {
     var status: ConnectionStatus
     var usage: TokenUsage?
 

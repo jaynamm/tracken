@@ -107,14 +107,17 @@ private struct UsageDetails: View {
                 .foregroundStyle(.secondary)
             Spacer()
 
-            if let planName = usage.account?.planName {
-                Text("ChatGPT \(Format.planName(planName))")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.secondary)
-            } else if let cost = usage.estimatedCostUSD {
-                Text(Format.cost(cost))
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 2) {
+                if let planName = usage.account?.planName {
+                    Text("ChatGPT \(Format.planName(planName))")
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                if let cost = usage.estimatedCostUSD {
+                    Text("≈ \(Format.cost(cost)) API estimate")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(provider.accentColor)
+                }
             }
         }
     }
@@ -157,7 +160,7 @@ private struct UsageDetails: View {
             }
 
             Label(
-                "Recent turns appear after the Codex account summary refreshes.",
+                "Daily totals use the account summary; model costs are local API estimates.",
                 systemImage: "clock.arrow.circlepath"
             )
             .font(.caption2)

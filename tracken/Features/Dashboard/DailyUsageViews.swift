@@ -94,7 +94,7 @@ struct DailyUsageChart: View {
     private func chartSummary(for day: DailyUsage) -> String {
         let date = day.date.formatted(.dateTime.month(.abbreviated).day())
         let tokens = Format.tokens(day.totalTokens)
-        let cost = day.estimatedCostUSD.map(Format.cost) ?? (showsBreakdown ? "—" : "Included")
+        let cost = day.estimatedCostUSD.map(Format.cost) ?? "—"
         return "\(date): \(tokens) • \(cost)"
     }
 
@@ -135,6 +135,13 @@ struct DailyUsageList: View {
             }
             .padding(.bottom, 8)
 
+            if days.contains(where: { !$0.modelUsage.isEmpty }) {
+                Text("Model costs are API-equivalent estimates from local Codex session metadata.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 4)
+            }
+
             ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
                 DailyUsageRow(day: day, tint: tint, showsBreakdown: showsBreakdown)
                     .padding(.vertical, 8)
@@ -153,41 +160,52 @@ private struct DailyUsageRow: View {
     let showsBreakdown: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(day.date.formatted(.dateTime.month(.abbreviated).day()))
-                    .font(.callout.weight(.medium))
-                Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 64, alignment: .leading)
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(day.date.formatted(.dateTime.month(.abbreviated).day()))
+                        .font(.callout.weight(.medium))
+                    Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 64, alignment: .leading)
 
-            if showsBreakdown {
-                compactMetric("Input", value: day.inputTokens ?? 0)
-                compactMetric("Output", value: day.outputTokens ?? 0)
+                if showsBreakdown {
+                    compactMetric("Input", value: day.inputTokens ?? 0)
+                    compactMetric("Output", value: day.outputTokens ?? 0)
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Format.tokens(day.totalTokens))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(day.totalTokens == 0 ? Color.secondary : tint)
+                    Text("tokens")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 72, alignment: .trailing)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(day.estimatedCostUSD.map(Format.cost) ?? "—")
+                        .font(.callout.weight(.medium))
+                    Text(day.estimatedCostUSD == nil ? "no estimate" : "estimated cost")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 82, alignment: .trailing)
             }
 
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(Format.tokens(day.totalTokens))
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(day.totalTokens == 0 ? Color.secondary : tint)
-                Text("tokens")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            if !day.modelUsage.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(day.modelUsage) { model in
+                        DailyModelCostRow(model: model, tint: tint)
+                    }
+                }
+                .padding(.leading, 76)
             }
-            .frame(minWidth: 72, alignment: .trailing)
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(day.estimatedCostUSD.map(Format.cost) ?? (showsBreakdown ? "—" : "Included"))
-                    .font(.callout.weight(.medium))
-                Text(day.estimatedCostUSD == nil && !showsBreakdown ? "ChatGPT plan" : "estimated cost")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(minWidth: 82, alignment: .trailing)
         }
     }
 
@@ -200,6 +218,51 @@ private struct DailyUsageRow: View {
                 .font(.caption.weight(.medium))
         }
         .frame(width: 58, alignment: .leading)
+    }
+}
+
+private struct DailyModelCostRow: View {
+    let model: ModelUsage
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Format.modelName(model.modelName))
+                    .font(.caption.weight(.medium))
+                Text(tokenBreakdown)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Text(Format.compactTokens(model.totalTokens))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(tint)
+            Text(model.estimatedCostUSD.map(Format.cost) ?? "Rate unavailable")
+                .font(.caption.weight(.medium))
+                .frame(minWidth: 82, alignment: .trailing)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+    }
+
+    private var tokenBreakdown: String {
+        var parts: [String] = []
+        if let input = model.inputTokens {
+            parts.append("Input \(Format.compactTokens(input))")
+        }
+        if model.cachedInputTokens > 0 {
+            parts.append("Cached \(Format.compactTokens(model.cachedInputTokens))")
+        }
+        if model.cacheWriteInputTokens > 0 {
+            parts.append("Cache write \(Format.compactTokens(model.cacheWriteInputTokens))")
+        }
+        if let output = model.outputTokens {
+            parts.append("Output \(Format.compactTokens(output))")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -216,7 +279,7 @@ struct ModelUsageList: View {
             if usage.modelUsage.isEmpty {
                 Label(
                     usage.provider == .codex
-                        ? "Codex account summaries do not include model-level usage."
+                        ? "No model token metadata was found in recent local Codex sessions."
                         : "No model usage is available.",
                     systemImage: "info.circle"
                 )
@@ -248,7 +311,7 @@ private struct ModelUsageRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(model.modelName)
+            Text(Format.modelName(model.modelName))
                 .font(.callout.weight(.medium))
 
             HStack(spacing: 12) {
@@ -272,13 +335,30 @@ private struct ModelUsageRow: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(model.estimatedCostUSD.map(Format.cost) ?? (includedInPlan ? "Included" : "—"))
                         .font(.callout.weight(.medium))
-                    Text(includedInPlan ? "ChatGPT plan" : "estimated cost")
+                    Text(model.estimatedCostUSD == nil && includedInPlan ? "ChatGPT plan" : "estimated cost")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .frame(minWidth: 82, alignment: .trailing)
             }
+
+            if model.cachedInputTokens > 0 || model.cacheWriteInputTokens > 0 {
+                Text(cacheSummary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    private var cacheSummary: String {
+        var parts: [String] = []
+        if model.cachedInputTokens > 0 {
+            parts.append("Cached input \(Format.tokens(model.cachedInputTokens))")
+        }
+        if model.cacheWriteInputTokens > 0 {
+            parts.append("Cache write \(Format.tokens(model.cacheWriteInputTokens))")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func compactMetric(_ title: String, value: Int) -> some View {

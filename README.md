@@ -4,6 +4,8 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 
 > [!IMPORTANT]
 > Codex 사용량은 로컬 Codex CLI에 로그인된 ChatGPT 계정에서 가져옵니다. Anthropic 연동은 아직 프로토타입이며, API 키를 기반으로 생성한 모의 데이터를 표시합니다.
+>
+> Codex 비용은 실제 청구액이 아니라 로컬 세션의 모델별 토큰에 OpenAI 표준 API 단가를 적용한 참고용 예상치입니다. ChatGPT 구독료나 요금제 포함 사용량을 뜻하지 않습니다.
 
 ## 실행 화면
 
@@ -22,7 +24,7 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 - Codex(ChatGPT)와 Claude(Anthropic) 공급자 전환
 - 최근 14일간의 일별 토큰 차트 및 상세 목록
 - 일별 토큰과 예상 비용을 함께 표시
-- 공급자가 제공하는 경우 모델별 토큰·예상 비용 표시
+- Codex 로컬 세션을 기반으로 일자별·모델별 토큰과 API 환산 예상 비용 표시
 - Codex 사용 한도·초기화 시각과 Anthropic 입력·출력 토큰·예상 비용 요약
 - 메뉴 막대에서 공급자별 사용량 빠르게 확인
 - 전체 또는 공급자별 사용량 새로고침
@@ -95,7 +97,9 @@ Anthropic은 현재 8자 이상의 문자열이면 프로토타입용 키로 사
 
 ## 공급자 연동 상태
 
-Codex는 `CodexAppServerTransport.swift`가 `codex app-server` JSONL 통신을 담당하고, `CodexAppServerClient.swift`가 응답을 앱 모델로 변환합니다. 로컬 CLI의 로그인 계정, 일별 사용량, 사용 한도를 읽으며 ChatGPT 인증 정보는 앱에서 직접 취급하지 않습니다. 현재 Codex 계정 요약은 모델별 토큰이나 비용을 제공하지 않으므로 모델별 화면에는 제공되지 않음으로 표시하고, 비용은 ChatGPT 요금제 포함으로 안내합니다.
+Codex는 `CodexAppServerTransport.swift`가 `codex app-server` JSONL 통신을 담당하고, `CodexAppServerClient.swift`가 응답을 앱 모델로 변환합니다. 로컬 CLI의 로그인 계정, 일별 사용량, 사용 한도를 읽으며 ChatGPT 인증 정보는 앱에서 직접 취급하지 않습니다.
+
+Codex 계정 요약은 모델별 사용량과 비용을 제공하지 않으므로 `CodexSessionCostEstimator.swift`가 최근 14일의 로컬 세션에서 날짜, 모델명, 입출력·캐시 토큰 메타데이터만 추출합니다. 일별 총 토큰은 계정 요약 값을 우선하고, 모델별 예상 비용은 [OpenAI 표준 API 단가](https://developers.openai.com/api/docs/pricing)의 입력·캐시 입력·캐시 쓰기·출력 요율을 별도로 적용합니다. 단가를 알 수 없는 모델은 임의로 계산하지 않고 `Rate unavailable`로 표시합니다.
 
 Anthropic의 실제 사용량을 가져오려면 `tracken/Services/UsageService.swift`의 `DemoAnthropicUsageService`를 실제 `AnthropicUsageProviding` 구현으로 교체해야 합니다.
 
@@ -111,4 +115,4 @@ Anthropic 사용량 API에는 일반 API 키가 아닌 Admin API 키가 필요�
 
 ## 보안 참고 사항
 
-Codex의 OAuth 인증 정보는 로컬 Codex CLI가 관리하며 앱으로 전달되지 않습니다. Anthropic API 키는 서비스 식별자 `com.tracken.apikeys`로 macOS 키체인에 저장되고 연결을 해제할 때 삭제됩니다. 현재 Anthropic 모의 구현은 키를 외부 서버로 전송하지 않지만, 실제 API 연동 시에는 공식 HTTPS 엔드포인트 외의 대상으로 키가 전달되지 않도록 주의해야 합니다.
+Codex의 OAuth 인증 정보는 로컬 Codex CLI가 관리하며 앱으로 전달되지 않습니다. 비용 계산기는 로컬 세션에서 필요한 메타데이터만 디코딩하고 외부로 전송하거나 별도로 저장하지 않습니다. Anthropic API 키는 서비스 식별자 `com.tracken.apikeys`로 macOS 키체인에 저장되고 연결을 해제할 때 삭제됩니다. 현재 Anthropic 모의 구현은 키를 외부 서버로 전송하지 않지만, 실제 API 연동 시에는 공식 HTTPS 엔드포인트 외의 대상으로 키가 전달되지 않도록 주의해야 합니다.

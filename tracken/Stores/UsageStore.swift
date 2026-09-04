@@ -185,10 +185,19 @@ final class UsageStore {
         let reconciledToday = max(latestToday, previousToday + lifetimeDelta)
         guard reconciledToday > latestToday else { return latest }
 
+        let latestTodayEntry = latest.daily.first {
+            calendar.isDate($0.date, inSameDayAs: today)
+        }
+
         var daily = latest.daily.filter {
             !calendar.isDate($0.date, inSameDayAs: today)
         }
-        daily.append(DailyUsage(date: today, totalTokens: reconciledToday))
+        daily.append(DailyUsage(
+            date: today,
+            totalTokens: reconciledToday,
+            estimatedCostUSD: latestTodayEntry?.estimatedCostUSD,
+            modelUsage: latestTodayEntry?.modelUsage ?? []
+        ))
 
         return TokenUsage(
             provider: latest.provider,
@@ -228,9 +237,26 @@ extension UsageStore {
                 }
                 let input = 24_000 + ((13 - offset) * 2_850) + (index * 8_400)
                 let output = 9_000 + ((offset % 4) * 2_300) + (index * 3_100)
-                return provider == .codex
-                    ? DailyUsage(date: date, totalTokens: input + output)
-                    : DailyUsage(
+                if provider == .codex {
+                    let cachedInput = input * 4 / 5
+                    let estimatedCost = Double(input - cachedInput) / 1_000_000 * 4
+                        + Double(cachedInput) / 1_000_000 * 0.40
+                        + Double(output) / 1_000_000 * 20
+                    let model = ModelUsage(
+                        modelName: "gpt-5.6-sol",
+                        inputTokens: input,
+                        outputTokens: output,
+                        cachedInputTokens: cachedInput,
+                        estimatedCostUSD: estimatedCost
+                    )
+                    return DailyUsage(
+                        date: date,
+                        totalTokens: input + output,
+                        estimatedCostUSD: estimatedCost,
+                        modelUsage: [model]
+                    )
+                }
+                return DailyUsage(
                         date: date,
                         inputTokens: input,
                         outputTokens: output,
@@ -245,8 +271,9 @@ extension UsageStore {
             let sonnetOutput = outputTokens * 7 / 10
             let opusInput = inputTokens - sonnetInput
             let opusOutput = outputTokens - sonnetOutput
-            let modelUsage = provider == .anthropic
-                ? [
+            let modelUsage: [ModelUsage]
+            if provider == .anthropic {
+                modelUsage = [
                     ModelUsage(
                         modelName: "Claude Sonnet (demo)",
                         inputTokens: sonnetInput,
@@ -262,14 +289,17 @@ extension UsageStore {
                             + Double(opusOutput) / 1_000_000 * 25
                     )
                 ]
-                : []
+            } else {
+                modelUsage = TokenUsage.aggregateModelUsage(daily.flatMap(\.modelUsage))
+            }
+            let estimatedCost = daily.compactMap(\.estimatedCostUSD).reduce(0, +)
 
             let usage = TokenUsage(
                 provider: provider,
                 daily: daily,
                 modelUsage: modelUsage,
                 granularity: provider == .codex ? .aggregate : .inputOutput,
-                estimatedCostUSD: provider == .anthropic ? 18.76 : nil,
+                estimatedCostUSD: estimatedCost,
                 updatedAt: Date().addingTimeInterval(-120),
                 account: provider == .codex
                     ? ProviderAccount(email: "demo@example.com", planName: "plus")

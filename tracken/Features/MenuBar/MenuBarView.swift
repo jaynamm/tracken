@@ -149,8 +149,8 @@ private struct MenuBarProviderCard: View {
         switch provider {
         case .codex:
             CompactMetric(
-                title: "Limit",
-                value: usage.rateLimit.map { Format.percent($0.usedPercent) } ?? "—"
+                title: "Today est.",
+                value: usage.last14Days.first?.estimatedCostUSD.map(Format.cost) ?? "—"
             )
         case .anthropic:
             CompactMetric(

@@ -38,6 +38,15 @@ enum Format {
         }
     }
 
+    nonisolated static func modelName(_ value: String) -> String {
+        switch value.lowercased() {
+        case let model where model.hasPrefix("gpt-5.6-sol"): "GPT-5.6 Sol"
+        case let model where model.hasPrefix("gpt-5.6-terra"): "GPT-5.6 Terra"
+        case let model where model.hasPrefix("gpt-5.6-luna"): "GPT-5.6 Luna"
+        default: value
+        }
+    }
+
     /// Relative "updated 2 minutes ago" style string.
     nonisolated static func relative(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()

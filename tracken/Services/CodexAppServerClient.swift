@@ -17,13 +17,19 @@ protocol CodexUsageProviding: AnyObject {
 @MainActor
 final class CodexAppServerClient: CodexUsageProviding {
     private let transport: CodexAppServerTransport
+    private let costEstimator: any CodexSessionCostEstimating
 
     init() {
         transport = CodexAppServerTransport()
+        costEstimator = CodexSessionCostEstimator()
     }
 
-    init(transport: CodexAppServerTransport) {
+    init(
+        transport: CodexAppServerTransport,
+        costEstimator: any CodexSessionCostEstimating = CodexSessionCostEstimator()
+    ) {
         self.transport = transport
+        self.costEstimator = costEstimator
     }
 
     func fetchUsage() async throws -> TokenUsage {
@@ -33,12 +39,20 @@ final class CodexAppServerClient: CodexUsageProviding {
 
         async let usageResponse: UsageResponse = transport.request(method: "account/usage/read")
         async let limitsResponse: RateLimitsResponse = transport.request(method: "account/rateLimits/read")
-        let (usage, limits) = try await (usageResponse, limitsResponse)
+        async let localEstimates = costEstimator.estimateRecentUsage(dayCount: 14, now: Date())
+        let (usage, limits, estimates) = try await (usageResponse, limitsResponse, localEstimates)
+
+        let officialDaily = (usage.dailyUsageBuckets ?? []).compactMap(Self.makeDailyUsage)
+        let daily = Self.merge(officialDaily: officialDaily, localEstimates: estimates)
+        let modelUsage = TokenUsage.aggregateModelUsage(estimates.values.flatMap { $0 })
+        let costs = modelUsage.compactMap(\.estimatedCostUSD)
 
         return TokenUsage(
             provider: .codex,
-            daily: (usage.dailyUsageBuckets ?? []).compactMap(Self.makeDailyUsage),
+            daily: daily,
+            modelUsage: modelUsage,
             granularity: .aggregate,
+            estimatedCostUSD: costs.isEmpty ? nil : costs.reduce(0, +),
             account: ProviderAccount(
                 email: account.email,
                 planName: account.planType ?? limits.rateLimits?.planType
@@ -84,6 +98,32 @@ final class CodexAppServerClient: CodexUsageProviding {
     private static func makeDailyUsage(from bucket: UsageResponse.DailyBucket) -> DailyUsage? {
         guard let date = usageDateFormatter.date(from: bucket.startDate) else { return nil }
         return DailyUsage(date: date, totalTokens: bucket.tokens)
+    }
+
+    private static func merge(
+        officialDaily: [DailyUsage],
+        localEstimates: [Date: [ModelUsage]],
+        calendar: Calendar = .current
+    ) -> [DailyUsage] {
+        var dailyByDate = Dictionary(uniqueKeysWithValues: officialDaily.map {
+            (calendar.startOfDay(for: $0.date), $0)
+        })
+
+        for (rawDate, models) in localEstimates {
+            let date = calendar.startOfDay(for: rawDate)
+            let costs = models.compactMap(\.estimatedCostUSD)
+            let estimatedCost = costs.isEmpty ? nil : costs.reduce(0, +)
+            let totalTokens = dailyByDate[date]?.totalTokens
+                ?? models.reduce(0) { $0 + $1.totalTokens }
+            dailyByDate[date] = DailyUsage(
+                date: date,
+                totalTokens: totalTokens,
+                estimatedCostUSD: estimatedCost,
+                modelUsage: models
+            )
+        }
+
+        return dailyByDate.values.sorted { $0.date > $1.date }
     }
 
     private static func makeRateLimit(from window: RateLimitsResponse.Window) -> CodexRateLimit {
