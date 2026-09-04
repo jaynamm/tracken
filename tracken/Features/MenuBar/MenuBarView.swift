@@ -2,8 +2,6 @@
 //  MenuBarView.swift
 //  tracken
 //
-//  Compact popover shown from the macOS menu bar item.
-//
 
 import SwiftUI
 
@@ -13,80 +11,193 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Token usage")
-                    .font(.headline)
-                Spacer()
-                Button {
-                    Task { await store.refreshAll() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
+            header
+
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(AIProvider.allCases) { provider in
+                    MenuBarProviderCard(provider: provider, state: store.state(for: provider))
                 }
-                .buttonStyle(.borderless)
-                .disabled(store.isRefreshing || store.connectedProviders.isEmpty)
             }
 
-            if store.connectedProviders.isEmpty {
-                Text("No accounts connected yet.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(AIProvider.allCases) { provider in
-                    if store.isConnected(provider) {
-                        row(for: provider)
-                    }
-                }
-
-                Divider()
-
-                HStack {
-                    Text("Total")
-                        .font(.callout.weight(.medium))
-                    Spacer()
-                    Text(Format.compactTokens(store.combinedTokens))
-                        .font(.callout.weight(.semibold))
-                    Text(Format.cost(store.combinedCostUSD))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            if !store.connectedProviders.isEmpty {
+                combinedUsage
             }
 
             Divider()
-
-            HStack {
-                Button("Open tracken") {
-                    openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
-                }
-                Spacer()
-                Button("Quit") {
-                    NSApp.terminate(nil)
-                }
-            }
-            .font(.callout)
+            footer
         }
         .padding(14)
-        .frame(width: 280)
+        .frame(width: 360)
         .task {
-            if store.usage.isEmpty {
+            if AIProvider.allCases.allSatisfy({ store.usage(for: $0) == nil }) {
                 await store.refreshAll()
             }
         }
     }
 
-    private func row(for provider: AIProvider) -> some View {
+    private var header: some View {
         HStack {
-            Label(provider.shortName, systemImage: provider.symbolName)
-                .foregroundStyle(provider.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Usage overview")
+                    .font(.headline)
+                Text("Last 14 days by platform")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Spacer()
-            if let usage = store.usage[provider] {
-                Text(Format.compactTokens(usage.totalTokens))
+            Button {
+                Task { await store.refreshAll() }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+            .disabled(store.isRefreshing)
+        }
+    }
+
+    private var combinedUsage: some View {
+        Group {
+            Divider()
+            HStack {
+                Label("Combined", systemImage: "sum")
                     .font(.callout.weight(.medium))
-            } else {
-                ProgressView().controlSize(.small)
+                Spacer()
+                Text(Format.compactTokens(store.combinedLast14DaysTokens))
+                    .font(.callout.weight(.semibold))
+                Text("14d")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var footer: some View {
+        HStack {
+            Button("Open tracken") {
+                openWindow(id: "main")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            Spacer()
+            Button("Quit") {
+                NSApp.terminate(nil)
             }
         }
         .font(.callout)
+    }
+}
+
+private struct MenuBarProviderCard: View {
+    let provider: AIProvider
+    let state: ProviderState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            cardHeader
+
+            if let usage = state.usage {
+                usageContent(usage)
+            } else {
+                emptyContent
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
+        .padding(12)
+        .background(provider.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(provider.accentColor.opacity(0.2), lineWidth: 1)
+        }
+    }
+
+    private var cardHeader: some View {
+        HStack(spacing: 6) {
+            Label(provider.shortName, systemImage: provider.symbolName)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(provider.accentColor)
+            Spacer(minLength: 4)
+            Image(systemName: state.status.symbolName)
+                .font(.caption)
+                .foregroundStyle(state.status.color)
+                .help(state.status.label)
+        }
+    }
+
+    private func usageContent(_ usage: TokenUsage) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Format.compactTokens(usage.last14DaysTotalTokens))
+                    .font(.title2.weight(.bold))
+                    .contentTransition(.numericText())
+                Text("tokens")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            HStack {
+                CompactMetric(
+                    title: "Today",
+                    value: Format.compactTokens(usage.last14Days.first?.totalTokens ?? 0)
+                )
+                Spacer()
+                secondaryMetric(for: usage)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func secondaryMetric(for usage: TokenUsage) -> some View {
+        switch provider {
+        case .codex:
+            CompactMetric(
+                title: "Limit",
+                value: usage.rateLimit.map { Format.percent($0.usedPercent) } ?? "—"
+            )
+        case .anthropic:
+            CompactMetric(
+                title: "Cost",
+                value: usage.estimatedCostUSD.map(Format.cost) ?? "—"
+            )
+        }
+    }
+
+    private var emptyContent: some View {
+        Group {
+            if case .connecting = state.status {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("Loading…")
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(state.status.label)
+                        .fontWeight(.medium)
+                        .foregroundStyle(state.status.color)
+                        .lineLimit(2)
+                    Text("Connect in Settings")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+}
+
+private struct CompactMetric: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.weight(.medium))
+        }
     }
 }
 

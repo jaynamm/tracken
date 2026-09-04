@@ -2,112 +2,221 @@
 //  UsageStore.swift
 //  tracken
 //
-//  Observable state for the whole app: which providers are connected,
-//  their latest usage, and refresh coordination.
-//
 
-import SwiftUI
+import Foundation
 import Observation
 
 @Observable
 @MainActor
 final class UsageStore {
-    /// Latest usage snapshot per provider.
-    private(set) var usage: [AIProvider: TokenUsage] = [:]
-
-    /// Connection status per provider.
-    private(set) var status: [AIProvider: ConnectionStatus] = [:]
-
-    /// Whether a refresh is currently running.
+    private(set) var providerStates: [AIProvider: ProviderState]
     private(set) var isRefreshing = false
-
-    /// Timestamp of the last successful refresh across all providers.
     private(set) var lastRefreshed: Date?
 
-    private let service = UsageService()
+    private let codexClient: any CodexUsageProviding
+    private let anthropicService: any AnthropicUsageProviding
+    private let apiKeyStore: any APIKeyStoring
 
     init() {
-        for provider in AIProvider.allCases {
-            let hasKey = KeychainHelper.shared.apiKey(for: provider) != nil
-            status[provider] = hasKey ? .connected : .notConnected
+        codexClient = CodexAppServerClient()
+        anthropicService = DemoAnthropicUsageService()
+        apiKeyStore = KeychainAPIKeyStore.shared
+        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore)
+    }
+
+    init(
+        codexClient: any CodexUsageProviding,
+        anthropicService: any AnthropicUsageProviding,
+        apiKeyStore: any APIKeyStoring
+    ) {
+        self.codexClient = codexClient
+        self.anthropicService = anthropicService
+        self.apiKeyStore = apiKeyStore
+        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore)
+    }
+
+    private static func makeInitialStates(
+        apiKeyStore: any APIKeyStoring
+    ) -> [AIProvider: ProviderState] {
+        Dictionary(uniqueKeysWithValues: AIProvider.allCases.map { provider in
+            let hasCredential = provider.authentication.requiresAPIKey
+                && apiKeyStore.apiKey(for: provider) != nil
+            return (
+                provider,
+                ProviderState(status: hasCredential ? .connected : .notConnected, usage: nil)
+            )
+        })
+    }
+
+    func state(for provider: AIProvider) -> ProviderState {
+        providerStates[provider] ?? .disconnected
+    }
+
+    func usage(for provider: AIProvider) -> TokenUsage? {
+        state(for: provider).usage
+    }
+
+    func status(for provider: AIProvider) -> ConnectionStatus {
+        state(for: provider).status
+    }
+
+    func isConnected(_ provider: AIProvider) -> Bool {
+        status(for: provider).isConnected
+    }
+
+    var connectedProviders: [AIProvider] {
+        AIProvider.allCases.filter(isConnected)
+    }
+
+    var combinedLast14DaysTokens: Int {
+        providerStates.values.reduce(0) {
+            $0 + ($1.usage?.last14DaysTotalTokens ?? 0)
         }
     }
 
-    // MARK: - Queries
+    // MARK: - Connections
 
-    func isConnected(_ provider: AIProvider) -> Bool {
-        status[provider]?.isConnected ?? false
-    }
-
-    func hasKey(_ provider: AIProvider) -> Bool {
-        KeychainHelper.shared.apiKey(for: provider) != nil
-    }
-
-    /// Providers that currently have a saved credential.
-    var connectedProviders: [AIProvider] {
-        AIProvider.allCases.filter { isConnected($0) }
-    }
-
-    /// Combined token total across all connected providers.
-    var combinedTokens: Int {
-        usage.values.reduce(0) { $0 + $1.totalTokens }
-    }
-
-    /// Combined estimated cost across all connected providers.
-    var combinedCostUSD: Double {
-        usage.values.reduce(0) { $0 + $1.estimatedCostUSD }
-    }
-
-    // MARK: - Credentials
-
-    /// Saves a key, marks the provider connected, and pulls fresh usage.
-    func connect(_ provider: AIProvider, apiKey: String) async {
-        KeychainHelper.shared.setAPIKey(apiKey, for: provider)
-        status[provider] = .connecting
+    func connectAPIKey(_ provider: AIProvider, apiKey: String) async {
+        guard provider.authentication.requiresAPIKey else { return }
+        apiKeyStore.setAPIKey(apiKey, for: provider)
         await refresh(provider)
     }
 
-    /// Removes the saved key and clears any cached usage.
-    func disconnect(_ provider: AIProvider) {
-        KeychainHelper.shared.deleteAPIKey(for: provider)
-        usage[provider] = nil
-        status[provider] = .notConnected
+    func disconnectAPIKey(_ provider: AIProvider) {
+        guard provider.authentication.requiresAPIKey else { return }
+        apiKeyStore.deleteAPIKey(for: provider)
+        setState(.disconnected, for: provider)
+    }
+
+    func connectCodex() async {
+        setStatus(.connecting, for: .codex)
+        do {
+            try await codexClient.connectWithChatGPT()
+            await refresh(.codex)
+        } catch {
+            setStatus(.failed(Self.errorMessage(error)), for: .codex)
+        }
+    }
+
+    func logoutCodex() async {
+        do {
+            try await codexClient.logout()
+            setState(.disconnected, for: .codex)
+        } catch {
+            setStatus(.failed(Self.errorMessage(error)), for: .codex)
+        }
     }
 
     // MARK: - Refresh
 
-    /// Refreshes usage for every connected provider.
     func refreshAll() async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
 
-        await withTaskGroup(of: Void.self) { group in
-            for provider in AIProvider.allCases where hasKey(provider) {
-                group.addTask { await self.refresh(provider) }
-            }
+        var refreshedAnyProvider = await refreshProvider(.codex)
+        if apiKeyStore.apiKey(for: .anthropic) != nil {
+            refreshedAnyProvider = await refreshProvider(.anthropic) || refreshedAnyProvider
         }
-        lastRefreshed = Date()
+        if refreshedAnyProvider {
+            lastRefreshed = Date()
+        }
     }
 
-    /// Refreshes usage for a single provider.
     func refresh(_ provider: AIProvider) async {
-        guard let key = KeychainHelper.shared.apiKey(for: provider) else {
-            status[provider] = .notConnected
-            return
-        }
+        _ = await refreshProvider(provider)
+    }
 
-        if status[provider]?.isConnected != true {
-            status[provider] = .connecting
-        }
+    @discardableResult
+    private func refreshProvider(_ provider: AIProvider) async -> Bool {
+        setStatus(.connecting, for: provider)
 
         do {
-            let result = try await service.fetchUsage(for: provider, apiKey: key)
-            usage[provider] = result
-            status[provider] = .connected
+            let usage: TokenUsage
+            switch provider {
+            case .codex:
+                usage = try await codexClient.fetchUsage()
+            case .anthropic:
+                guard let apiKey = apiKeyStore.apiKey(for: provider) else {
+                    setState(.disconnected, for: provider)
+                    return false
+                }
+                usage = try await anthropicService.fetchUsage(apiKey: apiKey)
+            }
+
+            setState(ProviderState(status: .connected, usage: usage), for: provider)
+            return true
+        } catch CodexAppServerError.notSignedIn where provider == .codex {
+            setState(.disconnected, for: provider)
+            return false
         } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            status[provider] = .failed(message)
+            setStatus(.failed(Self.errorMessage(error)), for: provider)
+            return false
         }
     }
+
+    private func setStatus(_ status: ConnectionStatus, for provider: AIProvider) {
+        var state = state(for: provider)
+        state.status = status
+        setState(state, for: provider)
+    }
+
+    private func setState(_ state: ProviderState, for provider: AIProvider) {
+        providerStates[provider] = state
+    }
+
+    private static func errorMessage(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
 }
+
+private extension ProviderAuthentication {
+    var requiresAPIKey: Bool {
+        if case .apiKey = self { return true }
+        return false
+    }
+}
+
+#if DOCUMENTATION_SNAPSHOTS
+extension UsageStore {
+    func loadDocumentationSamples() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        for (index, provider) in AIProvider.allCases.enumerated() {
+            let daily = (0..<14).compactMap { offset -> DailyUsage? in
+                guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
+                    return nil
+                }
+                let input = 24_000 + ((13 - offset) * 2_850) + (index * 8_400)
+                let output = 9_000 + ((offset % 4) * 2_300) + (index * 3_100)
+                return provider == .codex
+                    ? DailyUsage(date: date, totalTokens: input + output)
+                    : DailyUsage(date: date, inputTokens: input, outputTokens: output)
+            }
+
+            let usage = TokenUsage(
+                provider: provider,
+                daily: daily,
+                granularity: provider == .codex ? .aggregate : .inputOutput,
+                estimatedCostUSD: provider == .anthropic ? 18.76 : nil,
+                updatedAt: Date().addingTimeInterval(-120),
+                account: provider == .codex
+                    ? ProviderAccount(email: "demo@example.com", planName: "plus")
+                    : nil,
+                lifetimeTokens: provider == .codex ? 2_480_000 : nil,
+                rateLimit: provider == .codex
+                    ? CodexRateLimit(
+                        usedPercent: 42,
+                        windowDurationMinutes: 300,
+                        resetsAt: Date().addingTimeInterval(7_200)
+                    )
+                    : nil
+            )
+            setState(ProviderState(status: .connected, usage: usage), for: provider)
+        }
+
+        lastRefreshed = Date().addingTimeInterval(-120)
+    }
+}
+#endif

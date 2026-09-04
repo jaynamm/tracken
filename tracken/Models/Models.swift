@@ -2,161 +2,169 @@
 //  Models.swift
 //  tracken
 //
-//  Data models describing the AI providers we track and their token usage.
-//
 
-import SwiftUI
+import Foundation
 
-/// An AI provider whose token usage we can track.
-enum AIProvider: String, CaseIterable, Identifiable, Codable {
-    case openAI
+nonisolated enum AIProvider: String, CaseIterable, Identifiable {
+    case codex
     case anthropic
 
     var id: String { rawValue }
 
-    /// Full, user-facing name shown in settings.
     var displayName: String {
         switch self {
-        case .openAI: "ChatGPT (OpenAI)"
+        case .codex: "Codex (ChatGPT)"
         case .anthropic: "Claude (Anthropic)"
         }
     }
 
-    /// Short name shown in compact UI like the status bar.
     var shortName: String {
         switch self {
-        case .openAI: "ChatGPT"
+        case .codex: "Codex"
         case .anthropic: "Claude"
         }
     }
 
-    /// SF Symbol used as the provider's icon.
-    var symbolName: String {
+    var authentication: ProviderAuthentication {
         switch self {
-        case .openAI: "bubble.left.and.text.bubble.right"
-        case .anthropic: "sparkles"
-        }
-    }
-
-    /// Accent color used for the provider's card and charts.
-    var accentColor: Color {
-        switch self {
-        case .openAI: .green
-        case .anthropic: .orange
-        }
-    }
-
-    /// Whether the credential is an API key or a linked account token.
-    var credentialLabel: String {
-        switch self {
-        case .openAI: "OpenAI API Key"
-        case .anthropic: "Anthropic API Key"
+        case .codex: .codexCLI
+        case .anthropic: .apiKey(label: "Anthropic API Key")
         }
     }
 }
 
-/// A single day's token usage.
-struct DailyUsage: Identifiable, Codable, Equatable {
-    var date: Date
-    var inputTokens: Int
-    var outputTokens: Int
+nonisolated enum ProviderAuthentication: Equatable {
+    case codexCLI
+    case apiKey(label: String)
+}
+
+nonisolated struct DailyUsage: Identifiable, Equatable {
+    let date: Date
+    let inputTokens: Int?
+    let outputTokens: Int?
+    let totalTokens: Int
 
     var id: Date { date }
-    var totalTokens: Int { inputTokens + outputTokens }
+    var hasDetailedBreakdown: Bool { inputTokens != nil && outputTokens != nil }
+
+    init(date: Date, inputTokens: Int, outputTokens: Int) {
+        self.date = date
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        totalTokens = inputTokens + outputTokens
+    }
+
+    init(date: Date, totalTokens: Int) {
+        self.date = date
+        inputTokens = nil
+        outputTokens = nil
+        self.totalTokens = totalTokens
+    }
 }
 
-/// A snapshot of a provider's token usage for the current billing period.
-struct TokenUsage: Identifiable, Codable, Equatable {
-    var provider: AIProvider
-    var inputTokens: Int
-    var outputTokens: Int
-    var estimatedCostUSD: Double
-    var updatedAt: Date
+nonisolated struct ProviderAccount: Equatable {
+    let email: String?
+    let planName: String?
+}
 
-    /// Per-day breakdown returned by the provider.
-    var daily: [DailyUsage] = []
+nonisolated struct CodexRateLimit: Equatable {
+    let usedPercent: Double
+    let windowDurationMinutes: Int
+    let resetsAt: Date?
+}
+
+nonisolated enum UsageGranularity: Equatable {
+    case aggregate
+    case inputOutput
+}
+
+nonisolated struct TokenUsage: Identifiable, Equatable {
+    let provider: AIProvider
+    let daily: [DailyUsage]
+    let granularity: UsageGranularity
+    let estimatedCostUSD: Double?
+    let updatedAt: Date
+    let account: ProviderAccount?
+    let lifetimeTokens: Int?
+    let rateLimit: CodexRateLimit?
 
     var id: String { provider.id }
+    var hasDetailedBreakdown: Bool { granularity == .inputOutput }
+    var totalTokens: Int { daily.reduce(0) { $0 + $1.totalTokens } }
 
-    var totalTokens: Int { inputTokens + outputTokens }
+    init(
+        provider: AIProvider,
+        daily: [DailyUsage],
+        granularity: UsageGranularity = .inputOutput,
+        estimatedCostUSD: Double? = nil,
+        updatedAt: Date = Date(),
+        account: ProviderAccount? = nil,
+        lifetimeTokens: Int? = nil,
+        rateLimit: CodexRateLimit? = nil
+    ) {
+        self.provider = provider
+        self.daily = daily
+        self.granularity = granularity
+        self.estimatedCostUSD = estimatedCostUSD
+        self.updatedAt = updatedAt
+        self.account = account
+        self.lifetimeTokens = lifetimeTokens
+        self.rateLimit = rateLimit
+    }
 
-    /// The latest 14 calendar days, newest first. Missing dates are represented
-    /// with zero usage so the dashboard always shows a complete two-week window.
-    var last14Days: [DailyUsage] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+    /// Returns a complete, newest-first calendar window and fills missing dates.
+    func recentDays(
+        count: Int,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [DailyUsage] {
+        let today = calendar.startOfDay(for: now)
         let usageByDay = Dictionary(grouping: daily) {
             calendar.startOfDay(for: $0.date)
         }
 
-        return (0..<14).compactMap { offset in
+        return (0..<count).compactMap { offset in
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
                 return nil
             }
 
             let entries = usageByDay[date] ?? []
+            if hasDetailedBreakdown {
+                return DailyUsage(
+                    date: date,
+                    inputTokens: entries.compactMap(\.inputTokens).reduce(0, +),
+                    outputTokens: entries.compactMap(\.outputTokens).reduce(0, +)
+                )
+            }
+
             return DailyUsage(
                 date: date,
-                inputTokens: entries.reduce(0) { $0 + $1.inputTokens },
-                outputTokens: entries.reduce(0) { $0 + $1.outputTokens }
+                totalTokens: entries.reduce(0) { $0 + $1.totalTokens }
             )
         }
     }
 
-    var last14DaysInputTokens: Int {
-        last14Days.reduce(0) { $0 + $1.inputTokens }
-    }
-
-    var last14DaysOutputTokens: Int {
-        last14Days.reduce(0) { $0 + $1.outputTokens }
-    }
-
-    var last14DaysTotalTokens: Int {
-        last14Days.reduce(0) { $0 + $1.totalTokens }
-    }
-
-    /// The single busiest day in the tracked window, if any.
-    var peakDay: DailyUsage? {
-        last14Days.max { $0.totalTokens < $1.totalTokens }
-    }
+    var last14Days: [DailyUsage] { recentDays(count: 14) }
+    var last14DaysInputTokens: Int { last14Days.compactMap(\.inputTokens).reduce(0, +) }
+    var last14DaysOutputTokens: Int { last14Days.compactMap(\.outputTokens).reduce(0, +) }
+    var last14DaysTotalTokens: Int { last14Days.reduce(0) { $0 + $1.totalTokens } }
 }
 
-/// Connection state for a provider's credential.
-enum ConnectionStatus: Equatable {
+nonisolated enum ConnectionStatus: Equatable {
     case notConnected
     case connecting
     case connected
     case failed(String)
 
-    var label: String {
-        switch self {
-        case .notConnected: "Not connected"
-        case .connecting: "Connecting…"
-        case .connected: "Connected"
-        case .failed(let message): "Error: \(message)"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .notConnected: "circle.dashed"
-        case .connecting: "arrow.triangle.2.circlepath"
-        case .connected: "checkmark.circle.fill"
-        case .failed: "exclamationmark.triangle.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .notConnected: .secondary
-        case .connecting: .blue
-        case .connected: .green
-        case .failed: .red
-        }
-    }
-
     var isConnected: Bool {
         if case .connected = self { return true }
         return false
     }
+}
+
+nonisolated struct ProviderState: Equatable {
+    var status: ConnectionStatus
+    var usage: TokenUsage?
+
+    static let disconnected = ProviderState(status: .notConnected, usage: nil)
 }
