@@ -135,7 +135,8 @@ final class UsageStore {
             let usage: TokenUsage
             switch provider {
             case .codex:
-                usage = try await codexClient.fetchUsage()
+                let fetchedUsage = try await codexClient.fetchUsage()
+                usage = reconcileRecentCodexUsage(fetchedUsage)
             case .anthropic:
                 guard let apiKey = apiKeyStore.apiKey(for: provider) else {
                     setState(.disconnected, for: provider)
@@ -165,6 +166,43 @@ final class UsageStore {
         providerStates[provider] = state
     }
 
+    /// The lifetime summary can update before today's server-side daily bucket.
+    /// When that happens, carry the observed delta into today's total until the
+    /// authoritative daily bucket catches up on a later refresh.
+    private func reconcileRecentCodexUsage(_ latest: TokenUsage) -> TokenUsage {
+        guard
+            let previous = usage(for: .codex),
+            let previousLifetime = previous.lifetimeTokens,
+            let latestLifetime = latest.lifetimeTokens,
+            latestLifetime >= previousLifetime
+        else { return latest }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let previousToday = previous.recentDays(count: 1).first?.totalTokens ?? 0
+        let latestToday = latest.recentDays(count: 1).first?.totalTokens ?? 0
+        let lifetimeDelta = latestLifetime - previousLifetime
+        let reconciledToday = max(latestToday, previousToday + lifetimeDelta)
+        guard reconciledToday > latestToday else { return latest }
+
+        var daily = latest.daily.filter {
+            !calendar.isDate($0.date, inSameDayAs: today)
+        }
+        daily.append(DailyUsage(date: today, totalTokens: reconciledToday))
+
+        return TokenUsage(
+            provider: latest.provider,
+            daily: daily,
+            modelUsage: latest.modelUsage,
+            granularity: latest.granularity,
+            estimatedCostUSD: latest.estimatedCostUSD,
+            updatedAt: latest.updatedAt,
+            account: latest.account,
+            lifetimeTokens: latest.lifetimeTokens,
+            rateLimit: latest.rateLimit
+        )
+    }
+
     private static func errorMessage(_ error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
@@ -192,12 +230,44 @@ extension UsageStore {
                 let output = 9_000 + ((offset % 4) * 2_300) + (index * 3_100)
                 return provider == .codex
                     ? DailyUsage(date: date, totalTokens: input + output)
-                    : DailyUsage(date: date, inputTokens: input, outputTokens: output)
+                    : DailyUsage(
+                        date: date,
+                        inputTokens: input,
+                        outputTokens: output,
+                        estimatedCostUSD: Double(input) / 1_000_000 * 5
+                            + Double(output) / 1_000_000 * 25
+                    )
             }
+
+            let inputTokens = daily.compactMap(\.inputTokens).reduce(0, +)
+            let outputTokens = daily.compactMap(\.outputTokens).reduce(0, +)
+            let sonnetInput = inputTokens * 7 / 10
+            let sonnetOutput = outputTokens * 7 / 10
+            let opusInput = inputTokens - sonnetInput
+            let opusOutput = outputTokens - sonnetOutput
+            let modelUsage = provider == .anthropic
+                ? [
+                    ModelUsage(
+                        modelName: "Claude Sonnet (demo)",
+                        inputTokens: sonnetInput,
+                        outputTokens: sonnetOutput,
+                        estimatedCostUSD: Double(sonnetInput) / 1_000_000 * 5
+                            + Double(sonnetOutput) / 1_000_000 * 25
+                    ),
+                    ModelUsage(
+                        modelName: "Claude Opus (demo)",
+                        inputTokens: opusInput,
+                        outputTokens: opusOutput,
+                        estimatedCostUSD: Double(opusInput) / 1_000_000 * 5
+                            + Double(opusOutput) / 1_000_000 * 25
+                    )
+                ]
+                : []
 
             let usage = TokenUsage(
                 provider: provider,
                 daily: daily,
+                modelUsage: modelUsage,
                 granularity: provider == .codex ? .aggregate : .inputOutput,
                 estimatedCostUSD: provider == .anthropic ? 18.76 : nil,
                 updatedAt: Date().addingTimeInterval(-120),

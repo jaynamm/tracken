@@ -37,6 +37,8 @@ nonisolated struct DemoAnthropicUsageService: AnthropicUsageProviding {
     }
 
     private func makeUsage(seedText: String) -> TokenUsage {
+        let inputRate = 5.0
+        let outputRate = 25.0
         var seed = UInt64(bitPattern: Int64(seedText.hashValue))
         func next(upperBound: UInt64) -> Int {
             seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
@@ -45,26 +47,97 @@ nonisolated struct DemoAnthropicUsageService: AnthropicUsageProviding {
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let daily = (0..<Self.trackedDays).compactMap { offset -> DailyUsage? in
+        var daily: [DailyUsage] = []
+        var sonnetInput = 0
+        var sonnetOutput = 0
+        var opusInput = 0
+        var opusOutput = 0
+
+        for offset in 0..<Self.trackedDays {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
-                return nil
+                continue
             }
-            return DailyUsage(
-                date: date,
-                inputTokens: 4_000 + next(upperBound: 60_000),
-                outputTokens: 1_500 + next(upperBound: 24_000)
+
+            let inputTokens = 4_000 + next(upperBound: 60_000)
+            let outputTokens = 1_500 + next(upperBound: 24_000)
+            let sonnetShare = 65 + next(upperBound: 21)
+            let dailySonnetInput = inputTokens * sonnetShare / 100
+            let dailySonnetOutput = outputTokens * sonnetShare / 100
+            let dailyOpusInput = inputTokens - dailySonnetInput
+            let dailyOpusOutput = outputTokens - dailySonnetOutput
+
+            sonnetInput += dailySonnetInput
+            sonnetOutput += dailySonnetOutput
+            opusInput += dailyOpusInput
+            opusOutput += dailyOpusOutput
+
+            let estimatedCost = Self.estimatedCost(
+                inputTokens: inputTokens,
+                outputTokens: outputTokens,
+                inputRate: inputRate,
+                outputRate: outputRate
             )
+            daily.append(DailyUsage(
+                date: date,
+                inputTokens: inputTokens,
+                outputTokens: outputTokens,
+                estimatedCostUSD: estimatedCost
+            ))
         }
 
-        let inputTokens = daily.compactMap(\.inputTokens).reduce(0, +)
-        let outputTokens = daily.compactMap(\.outputTokens).reduce(0, +)
-        let cost = Double(inputTokens) / 1_000_000 * 5
-            + Double(outputTokens) / 1_000_000 * 25
+        let modelUsage = [
+            Self.makeModelUsage(
+                name: "Claude Sonnet (demo)",
+                inputTokens: sonnetInput,
+                outputTokens: sonnetOutput,
+                inputRate: inputRate,
+                outputRate: outputRate
+            ),
+            Self.makeModelUsage(
+                name: "Claude Opus (demo)",
+                inputTokens: opusInput,
+                outputTokens: opusOutput,
+                inputRate: inputRate,
+                outputRate: outputRate
+            )
+        ]
+        let cost = daily.compactMap(\.estimatedCostUSD).reduce(0, +)
 
         return TokenUsage(
             provider: .anthropic,
             daily: daily,
+            modelUsage: modelUsage,
             estimatedCostUSD: cost
         )
+    }
+
+    private static func makeModelUsage(
+        name: String,
+        inputTokens: Int,
+        outputTokens: Int,
+        inputRate: Double,
+        outputRate: Double
+    ) -> ModelUsage {
+        ModelUsage(
+            modelName: name,
+            inputTokens: inputTokens,
+            outputTokens: outputTokens,
+            estimatedCostUSD: estimatedCost(
+                inputTokens: inputTokens,
+                outputTokens: outputTokens,
+                inputRate: inputRate,
+                outputRate: outputRate
+            )
+        )
+    }
+
+    private static func estimatedCost(
+        inputTokens: Int,
+        outputTokens: Int,
+        inputRate: Double,
+        outputRate: Double
+    ) -> Double {
+        Double(inputTokens) / 1_000_000 * inputRate
+            + Double(outputTokens) / 1_000_000 * outputRate
     }
 }

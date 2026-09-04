@@ -37,7 +37,7 @@ final class CodexAppServerClient: CodexUsageProviding {
 
         return TokenUsage(
             provider: .codex,
-            daily: usage.dailyUsageBuckets.compactMap(Self.makeDailyUsage),
+            daily: (usage.dailyUsageBuckets ?? []).compactMap(Self.makeDailyUsage),
             granularity: .aggregate,
             account: ProviderAccount(
                 email: account.email,
@@ -122,7 +122,7 @@ nonisolated private struct LoginStartResponse: Decodable {
 
 nonisolated private struct UsageResponse: Decodable {
     let summary: Summary?
-    let dailyUsageBuckets: [DailyBucket]
+    let dailyUsageBuckets: [DailyBucket]?
 
     nonisolated struct Summary: Decodable {
         let lifetimeTokens: Int?

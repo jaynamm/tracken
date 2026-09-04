@@ -29,9 +29,7 @@ struct MenuBarView: View {
         .padding(14)
         .frame(width: 360)
         .task {
-            if AIProvider.allCases.allSatisfy({ store.usage(for: $0) == nil }) {
-                await store.refreshAll()
-            }
+            await store.refreshAll()
         }
     }
 
@@ -156,8 +154,8 @@ private struct MenuBarProviderCard: View {
             )
         case .anthropic:
             CompactMetric(
-                title: "Cost",
-                value: usage.estimatedCostUSD.map(Format.cost) ?? "—"
+                title: "Today cost",
+                value: usage.last14Days.first?.estimatedCostUSD.map(Format.cost) ?? "—"
             )
         }
     }

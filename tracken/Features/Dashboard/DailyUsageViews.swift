@@ -84,11 +84,18 @@ struct DailyUsageChart: View {
                 .foregroundStyle(.secondary)
             Spacer()
             if let day = selectedDay ?? peakDay {
-                Text("\(day.date.formatted(.dateTime.month(.abbreviated).day())): \(Format.tokens(day.totalTokens))")
+                Text(chartSummary(for: day))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(tint)
             }
         }
+    }
+
+    private func chartSummary(for day: DailyUsage) -> String {
+        let date = day.date.formatted(.dateTime.month(.abbreviated).day())
+        let tokens = Format.tokens(day.totalTokens)
+        let cost = day.estimatedCostUSD.map(Format.cost) ?? (showsBreakdown ? "—" : "Included")
+        return "\(date): \(tokens) • \(cost)"
     }
 
     private var selectedDate: Binding<Date?> {
@@ -172,6 +179,105 @@ private struct DailyUsageRow: View {
                     .foregroundStyle(.secondary)
             }
             .frame(minWidth: 72, alignment: .trailing)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(day.estimatedCostUSD.map(Format.cost) ?? (showsBreakdown ? "—" : "Included"))
+                    .font(.callout.weight(.medium))
+                Text(day.estimatedCostUSD == nil && !showsBreakdown ? "ChatGPT plan" : "estimated cost")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 82, alignment: .trailing)
+        }
+    }
+
+    private func compactMetric(_ title: String, value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(Format.compactTokens(value))
+                .font(.caption.weight(.medium))
+        }
+        .frame(width: 58, alignment: .leading)
+    }
+}
+
+struct ModelUsageList: View {
+    let usage: TokenUsage
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Usage by model")
+                .font(.headline)
+                .padding(.bottom, 8)
+
+            if usage.modelUsage.isEmpty {
+                Label(
+                    usage.provider == .codex
+                        ? "Codex account summaries do not include model-level usage."
+                        : "No model usage is available.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 8)
+            } else {
+                ForEach(Array(usage.modelUsage.enumerated()), id: \.element.id) { index, model in
+                    ModelUsageRow(
+                        model: model,
+                        tint: tint,
+                        includedInPlan: usage.provider == .codex
+                    )
+                        .padding(.vertical, 8)
+
+                    if index < usage.modelUsage.count - 1 {
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ModelUsageRow: View {
+    let model: ModelUsage
+    let tint: Color
+    let includedInPlan: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.modelName)
+                .font(.callout.weight(.medium))
+
+            HStack(spacing: 12) {
+                if let inputTokens = model.inputTokens, let outputTokens = model.outputTokens {
+                    compactMetric("Input", value: inputTokens)
+                    compactMetric("Output", value: outputTokens)
+                }
+
+                Spacer(minLength: 8)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Format.tokens(model.totalTokens))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(tint)
+                    Text("tokens")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 72, alignment: .trailing)
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(model.estimatedCostUSD.map(Format.cost) ?? (includedInPlan ? "Included" : "—"))
+                        .font(.callout.weight(.medium))
+                    Text(includedInPlan ? "ChatGPT plan" : "estimated cost")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minWidth: 82, alignment: .trailing)
+            }
         }
     }
 

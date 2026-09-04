@@ -21,6 +21,8 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 
 - Codex(ChatGPT)와 Claude(Anthropic) 공급자 전환
 - 최근 14일간의 일별 토큰 차트 및 상세 목록
+- 일별 토큰과 예상 비용을 함께 표시
+- 공급자가 제공하는 경우 모델별 토큰·예상 비용 표시
 - Codex 사용 한도·초기화 시각과 Anthropic 입력·출력 토큰·예상 비용 요약
 - 메뉴 막대에서 공급자별 사용량 빠르게 확인
 - 전체 또는 공급자별 사용량 새로고침
@@ -93,7 +95,7 @@ Anthropic은 현재 8자 이상의 문자열이면 프로토타입용 키로 사
 
 ## 공급자 연동 상태
 
-Codex는 `CodexAppServerTransport.swift`가 `codex app-server` JSONL 통신을 담당하고, `CodexAppServerClient.swift`가 응답을 앱 모델로 변환합니다. 로컬 CLI의 로그인 계정, 일별 사용량, 사용 한도를 읽으며 ChatGPT 인증 정보는 앱에서 직접 취급하지 않습니다.
+Codex는 `CodexAppServerTransport.swift`가 `codex app-server` JSONL 통신을 담당하고, `CodexAppServerClient.swift`가 응답을 앱 모델로 변환합니다. 로컬 CLI의 로그인 계정, 일별 사용량, 사용 한도를 읽으며 ChatGPT 인증 정보는 앱에서 직접 취급하지 않습니다. 현재 Codex 계정 요약은 모델별 토큰이나 비용을 제공하지 않으므로 모델별 화면에는 제공되지 않음으로 표시하고, 비용은 ChatGPT 요금제 포함으로 안내합니다.
 
 Anthropic의 실제 사용량을 가져오려면 `tracken/Services/UsageService.swift`의 `DemoAnthropicUsageService`를 실제 `AnthropicUsageProviding` 구현으로 교체해야 합니다.
 

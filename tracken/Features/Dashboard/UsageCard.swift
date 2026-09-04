@@ -87,6 +87,9 @@ private struct UsageDetails: View {
             .id(provider)
 
             Divider()
+            ModelUsageList(usage: usage, tint: provider.accentColor)
+
+            Divider()
             DailyUsageList(
                 days: days,
                 tint: provider.accentColor,
@@ -135,21 +138,30 @@ private struct UsageDetails: View {
     }
 
     private var codexSummary: some View {
-        HStack {
-            if let rateLimit = usage.rateLimit {
-                UsageMetric(title: "Usage limit", value: Format.percent(rateLimit.usedPercent))
-                Spacer()
-                if let resetsAt = rateLimit.resetsAt {
-                    UsageMetric(
-                        title: "Resets",
-                        value: resetsAt.formatted(
-                            .dateTime.month(.abbreviated).day().hour().minute()
-                        )
-                    )
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if let rateLimit = usage.rateLimit {
+                    UsageMetric(title: "Usage limit", value: Format.percent(rateLimit.usedPercent))
                     Spacer()
+                    if let resetsAt = rateLimit.resetsAt {
+                        UsageMetric(
+                            title: "Resets",
+                            value: resetsAt.formatted(
+                                .dateTime.month(.abbreviated).day().hour().minute()
+                            )
+                        )
+                        Spacer()
+                    }
                 }
+                UpdatedLabel(date: usage.updatedAt)
             }
-            UpdatedLabel(date: usage.updatedAt)
+
+            Label(
+                "Recent turns appear after the Codex account summary refreshes.",
+                systemImage: "clock.arrow.circlepath"
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
         }
     }
 }

@@ -26,7 +26,12 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 460, minHeight: 520)
-        .task { await store.refreshAll() }
+        .task {
+            while !Task.isCancelled {
+                await store.refreshAll()
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .environment(store)
