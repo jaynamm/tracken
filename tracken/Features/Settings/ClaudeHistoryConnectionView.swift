@@ -11,8 +11,8 @@ struct ClaudeHistoryConnectionView: View {
             Text("Reads saved usage from this Mac automatically. No API key is needed. Claude web and other devices are not included.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Label(store.isMonitoringClaude ? "Watching for history changes, even with the window closed" : "Periodic history refresh",
-                  systemImage: "waveform.path")
+            Label(store.isAutoRefreshEnabled ? "Refreshes every hour, even with the window closed" : "Automatic refresh paused",
+                  systemImage: "clock")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ClaudeLimitsView(compact: true)

@@ -30,9 +30,6 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 360)
-        .task {
-            await store.refreshAll()
-        }
     }
 
     private var header: some View {
@@ -40,7 +37,7 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Usage overview")
                     .font(.headline)
-                Text("Last 14 days by platform")
+                Text("Last 14 days · hourly refresh")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

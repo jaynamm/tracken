@@ -55,7 +55,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("tracken")
                     .font(.headline)
-                Text("Codex & Claude token usage")
+                Text("Codex & Claude · hourly refresh")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

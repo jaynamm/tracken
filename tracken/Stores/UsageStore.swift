@@ -14,16 +14,15 @@ final class UsageStore {
     private(set) var lastRefreshed: Date?
     private(set) var claudeRateLimits: ClaudeRateLimitSnapshot?
     private(set) var claudeRateLimitError: String?
-    private(set) var isMonitoringClaude = false
+    private(set) var isAutoRefreshEnabled = false
+    private(set) var lastAutomaticRefresh: Date?
+    static let automaticRefreshInterval: TimeInterval = 3_600
     private(set) var pricingSnapshots: [AIProvider: PricingSnapshot] = [:]
     private(set) var pricingErrors: [AIProvider: String] = [:]
     private(set) var isRefreshingPrices = false
     private let pricingCatalog: PricingCatalog?
 
-    private let historyMonitor = DirectoryChangeMonitor()
-    private let limitMonitor = DirectoryChangeMonitor()
     private var periodicRefresh: Task<Void, Never>?
-    private var pendingClaudeRefresh = false
     private var rateLimitService = ClaudeRateLimitService()
 
     private let codexClient: any CodexUsageProviding
@@ -85,45 +84,38 @@ final class UsageStore {
     // MARK: - App lifetime monitoring
 
     func startMonitoring(
-        projectsURL: URL = ClaudeSessionUsageService().projectsURL,
         limitsDirectory: URL = ClaudeRateLimitService.defaultDirectory
     ) {
         guard periodicRefresh == nil else { return }
         rateLimitService = ClaudeRateLimitService(directory: limitsDirectory)
-        try? FileManager.default.createDirectory(at: limitsDirectory, withIntermediateDirectories: true)
-        isMonitoringClaude = historyMonitor.start(directory: projectsURL) { [weak self] in
-            self?.claudeHistoryDidChange()
-        }
-        _ = limitMonitor.start(directory: limitsDirectory) { [weak self] in
-            self?.refreshClaudeRateLimits()
-        }
-        refreshClaudeRateLimits()
+        isAutoRefreshEnabled = true
+        lastAutomaticRefresh = nil
         periodicRefresh = Task { @MainActor [weak self] in
-            await self?.refreshAll()
-            await self?.refreshPrices()
+            await self?.refreshAutomaticallyIfDue()
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(60)) }
+                do { try await Task.sleep(for: .seconds(Self.automaticRefreshInterval)) }
                 catch { return }
-                await self?.refreshPrices()
-                await self?.refreshAll()
+                await self?.refreshAutomaticallyIfDue()
             }
         }
     }
 
     func stopMonitoring() {
-        historyMonitor.stop()
-        limitMonitor.stop()
         periodicRefresh?.cancel()
         periodicRefresh = nil
-        isMonitoringClaude = false
+        isAutoRefreshEnabled = false
     }
 
-    private func claudeHistoryDidChange() {
-        if refreshingProviders.contains(.anthropic) {
-            pendingClaudeRefresh = true
-        } else {
-            Task { await refresh(.anthropic) }
-        }
+    /// The app owns one hourly timer. Views and file writes never initiate a read.
+    func refreshAutomaticallyIfDue(now: Date = Date()) async {
+        guard isAutoRefreshEnabled, !Task.isCancelled else { return }
+        if let lastAutomaticRefresh,
+           now.timeIntervalSince(lastAutomaticRefresh) < Self.automaticRefreshInterval { return }
+        lastAutomaticRefresh = now
+        // Reprice once in the same cycle, even when the daily price table changes.
+        await refreshPrices(recalculateUsage: false)
+        guard !Task.isCancelled else { return }
+        await refreshAll()
     }
 
     func refreshClaudeRateLimits() {
@@ -163,7 +155,7 @@ final class UsageStore {
 
     // MARK: - Refresh
 
-    func refreshPrices(force: Bool = false) async {
+    func refreshPrices(force: Bool = false, recalculateUsage: Bool = true) async {
         guard let pricingCatalog, !isRefreshingPrices else { return }
         isRefreshingPrices = true
         defer { isRefreshingPrices = false }
@@ -178,7 +170,7 @@ final class UsageStore {
             pricingSnapshots[provider] = await pricingCatalog.snapshot(for: provider)
             pricingErrors[provider] = await pricingCatalog.error(for: provider)
         }
-        if changed.0 || changed.1 { await refreshAll() }
+        if recalculateUsage && (changed.0 || changed.1) { await refreshAll() }
     }
 
     func refreshAll() async {
@@ -206,10 +198,6 @@ final class UsageStore {
         guard refreshingProviders.insert(provider).inserted else { return false }
         defer {
             refreshingProviders.remove(provider)
-            if provider == .anthropic, pendingClaudeRefresh {
-                pendingClaudeRefresh = false
-                Task { await refresh(.anthropic) }
-            }
         }
         setStatus(.connecting, for: provider)
 
