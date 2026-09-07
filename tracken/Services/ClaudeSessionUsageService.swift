@@ -3,24 +3,31 @@ import Foundation
 /// Reads usage metadata only; never authenticates or sends a model request.
 nonisolated struct ClaudeSessionUsageService: AnthropicUsageProviding {
     let projectsURL: URL
+    private let pricingCatalog: PricingCatalog?
 
     init() {
+        pricingCatalog = .shared
         let config = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"]
             .map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
         projectsURL = config.appendingPathComponent("projects", isDirectory: true)
     }
 
-    init(projectsURL: URL) { self.projectsURL = projectsURL }
+    init(projectsURL: URL, pricingCatalog: PricingCatalog? = nil) {
+        self.projectsURL = projectsURL
+        self.pricingCatalog = pricingCatalog
+    }
 
     func fetchUsage() async throws -> TokenUsage {
         let projectsURL = projectsURL
+        let prices = await pricingCatalog?.snapshot(for: .anthropic) ?? .bundled(for: .anthropic)
         return try await Task.detached(priority: .utility) {
-            try Self.loadUsage(at: projectsURL, now: Date())
+            try Self.loadUsage(at: projectsURL, now: Date(), prices: prices)
         }.value
     }
 
-    static func loadUsage(at root: URL, now: Date, calendar: Calendar = .current) throws -> TokenUsage {
+    static func loadUsage(at root: URL, now: Date, calendar: Calendar = .current,
+                          prices: PricingSnapshot = .bundled(for: .anthropic)) throws -> TokenUsage {
         guard FileManager.default.fileExists(atPath: root.path) else {
             throw UsageServiceError.unavailable("No local Claude Code history found. Existing sessions are read automatically when available; no API key is needed.")
         }
@@ -69,7 +76,7 @@ nonisolated struct ClaudeSessionUsageService: AnthropicUsageProviding {
 
         let daily = Dictionary(grouping: records.values) { calendar.startOfDay(for: $0.timestamp) }
             .map { date, records in
-                let models = TokenUsage.aggregateModelUsage(records.map { $0.modelUsage })
+                let models = TokenUsage.aggregateModelUsage(records.map { $0.modelUsage(prices: prices) })
                 return DailyUsage(date: date,
                                   inputTokens: models.compactMap(\.inputTokens).reduce(0, +),
                                   outputTokens: models.compactMap(\.outputTokens).reduce(0, +),
@@ -100,11 +107,11 @@ nonisolated private struct ClaudeUsageRecord {
     let model: String
     let usage: ClaudeTokenUsage
 
-    var modelUsage: ModelUsage {
+    func modelUsage(prices: PricingSnapshot) -> ModelUsage {
         ModelUsage(modelName: model,
                    inputTokens: usage.inputTokens + usage.cacheRead + usage.cacheWrite,
                    outputTokens: usage.outputTokens, cachedInputTokens: usage.cacheRead,
-                   cacheWriteInputTokens: usage.cacheWrite, estimatedCostUSD: usage.estimatedCost(for: model))
+                   cacheWriteInputTokens: usage.cacheWrite, estimatedCostUSD: usage.estimatedCost(for: model, prices: prices))
     }
 }
 
@@ -142,24 +149,19 @@ nonisolated private struct ClaudeTokenUsage: Decodable {
     /// Current standard API-equivalent token prices, not historical bills or
     /// subscription charges. https://platform.claude.com/docs/en/about-claude/pricing
     /// Verified 2026-09-07. Unrecognized models or pricing modes stay unpriced.
-    func estimatedCost(for model: String) -> Double? {
+    func estimatedCost(for model: String, prices: PricingSnapshot) -> Double? {
         guard speed == nil || speed == "standard",
               serviceTier == nil || serviceTier == "standard",
               inferenceGeo == nil || ["not_available", "global", "us"].contains(inferenceGeo!) else { return nil }
-        let inputRate: Double
-        let outputRate: Double
-        switch model {
-        case "claude-sonnet-5": (inputRate, outputRate) = (2, 10)
-        case "claude-opus-5", "claude-opus-4-8": (inputRate, outputRate) = (5, 25)
-        case "claude-fable-5": (inputRate, outputRate) = (10, 50)
-        default: return nil
-        }
-        let uncachedCost = Double(inputTokens) * inputRate
-        let readCost = Double(cacheRead) * inputRate * 0.1
-        let writeCost = Double(cacheWrite - cacheWrite1h) * inputRate * 1.25
-            + Double(cacheWrite1h) * inputRate * 2
-        let outputCost = Double(outputTokens) * outputRate
+        // Older Claude versions had model-specific long-context conditions.
+        // Leave those requests unpriced instead of applying a newer model's rules.
+        let olderModel = model.range(of: #"^claude-(opus|sonnet|haiku)-(3|4(?:-[015])?)(?:-\d{8})?$"#,
+                                     options: .regularExpression) != nil
+        if olderModel && inputTokens + cacheRead + cacheWrite > 200_000 { return nil }
+        guard let cost = prices.rate(for: model)?.cost(
+            input: inputTokens, cached: cacheRead, write: cacheWrite - cacheWrite1h,
+            write1h: cacheWrite1h, output: outputTokens) else { return nil }
         let geoMultiplier = inferenceGeo == "us" ? 1.1 : 1.0
-        return (uncachedCost + readCost + writeCost + outputCost) / 1_000_000 * geoMultiplier
+        return cost * geoMultiplier
     }
 }

@@ -11,10 +11,18 @@ struct DailyUsageChart: View {
     let tint: Color
     let showsBreakdown: Bool
 
-    @State private var selectedDay: DailyUsage?
+    @State private var selectedDayDate: Date?
+    @State private var showsCost = true
+
+    private var selectedDay: DailyUsage? { days.first { $0.date == selectedDayDate } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Picker("Daily chart", selection: $showsCost) {
+                Text("Estimated cost (USD)").tag(true)
+                Text("Tokens").tag(false)
+            }
+            .pickerStyle(.segmented)
             chartHeader
 
             Chart {
@@ -32,8 +40,9 @@ struct DailyUsageChart: View {
                 "Output": tint.opacity(0.4)
             ])
             .chartLegend(.hidden)
+            .chartXScale(domain: chartDateRange)
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day, count: 3)) {
+                AxisMarks(values: .stride(by: .day, count: max(1, days.count / 5))) {
                     AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                 }
             }
@@ -41,7 +50,9 @@ struct DailyUsageChart: View {
                 AxisMarks { value in
                     AxisGridLine()
                     AxisValueLabel {
-                        if let tokens = value.as(Int.self) {
+                        if showsCost, let cost = value.as(Double.self) {
+                            Text(Format.cost(cost))
+                        } else if let tokens = value.as(Int.self) {
                             Text(Format.compactTokens(tokens))
                         }
                     }
@@ -49,12 +60,29 @@ struct DailyUsageChart: View {
             }
             .chartXSelection(value: selectedDate)
             .frame(height: 120)
+
+            if showsCost {
+                Text("API-equivalent cost of recorded usage. Not a subscription charge.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                if days.contains(where: { $0.estimatedCostUSD == nil }) {
+                    Text("Days without a complete estimate have no cost bar; see the list below.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
     @ChartContentBuilder
     private func marks(for day: DailyUsage) -> some ChartContent {
-        if showsBreakdown {
+        if showsCost {
+            if let cost = day.estimatedCostUSD {
+                BarMark(x: .value("Day", day.date, unit: .day),
+                        y: .value("Estimated cost (USD)", cost))
+                    .foregroundStyle(tint)
+            }
+        } else if showsBreakdown {
             BarMark(
                 x: .value("Day", day.date, unit: .day),
                 y: .value("Output", day.outputTokens ?? 0),
@@ -78,11 +106,10 @@ struct DailyUsageChart: View {
     }
 
     private var chartHeader: some View {
-        HStack {
-            Text("14-day trend")
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Daily trend")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Spacer()
             if let day = selectedDay ?? peakDay {
                 Text(chartSummary(for: day))
                     .font(.caption2.weight(.medium))
@@ -94,27 +121,39 @@ struct DailyUsageChart: View {
     private func chartSummary(for day: DailyUsage) -> String {
         let date = day.date.formatted(.dateTime.month(.abbreviated).day())
         let tokens = Format.tokens(day.totalTokens)
-        let cost = day.estimatedCostUSD.map(Format.cost) ?? "—"
+        let cost = day.estimatedCostUSD.map { "≈ \(Format.cost($0))" } ?? "Estimate unavailable"
         return "\(date): \(tokens) • \(cost)"
     }
 
     private var selectedDate: Binding<Date?> {
         Binding(
-            get: { selectedDay?.date },
+            get: { selectedDayDate },
             set: { date in
                 guard let date else {
-                    selectedDay = nil
+                    selectedDayDate = nil
                     return
                 }
-                selectedDay = days.min {
+                selectedDayDate = days.min {
                     abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
-                }
+                }?.date
             }
         )
     }
 
     private var peakDay: DailyUsage? {
-        days.max { $0.totalTokens < $1.totalTokens }
+        if showsCost {
+            return days.filter { $0.estimatedCostUSD != nil }.max {
+                ($0.estimatedCostUSD ?? 0) < ($1.estimatedCostUSD ?? 0)
+            }
+        }
+        return days.max { $0.totalTokens < $1.totalTokens }
+    }
+
+    private var chartDateRange: ClosedRange<Date> {
+        let start = days.map(\.date).min() ?? Calendar.current.startOfDay(for: Date())
+        let last = days.map(\.date).max() ?? start
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last
+        return start...end
     }
 }
 
@@ -126,7 +165,7 @@ struct DailyUsageList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Daily usage")
+                Text("Daily usage & estimated cost")
                     .font(.headline)
                 Spacer()
                 Text("Newest first")
@@ -171,11 +210,6 @@ private struct DailyUsageRow: View {
                 }
                 .frame(width: 64, alignment: .leading)
 
-                if showsBreakdown {
-                    compactMetric("Input", value: day.inputTokens ?? 0)
-                    compactMetric("Output", value: day.outputTokens ?? 0)
-                }
-
                 Spacer(minLength: 8)
 
                 VStack(alignment: .trailing, spacing: 2) {
@@ -190,12 +224,22 @@ private struct DailyUsageRow: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(day.estimatedCostUSD.map(Format.cost) ?? "—")
-                        .font(.callout.weight(.medium))
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(day.estimatedCostUSD == nil ? Color.secondary : tint)
                     Text(day.estimatedCostUSD == nil ? "no estimate" : "estimated cost")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .frame(minWidth: 82, alignment: .trailing)
+            }
+
+            if showsBreakdown {
+                HStack(spacing: 16) {
+                    compactMetric("Input", value: day.inputTokens ?? 0)
+                    compactMetric("Output", value: day.outputTokens ?? 0)
+                    Spacer()
+                }
+                .padding(.leading, 76)
             }
 
             if !day.modelUsage.isEmpty {

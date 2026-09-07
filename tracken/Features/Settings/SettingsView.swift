@@ -23,6 +23,7 @@ struct SettingsView: View {
             Divider()
 
             Form {
+                PricingSettingsView()
                 ForEach(AIProvider.allCases) { provider in
                     Section {
                         connectionView(for: provider)

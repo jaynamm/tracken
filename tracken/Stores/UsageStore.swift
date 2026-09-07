@@ -15,6 +15,10 @@ final class UsageStore {
     private(set) var claudeRateLimits: ClaudeRateLimitSnapshot?
     private(set) var claudeRateLimitError: String?
     private(set) var isMonitoringClaude = false
+    private(set) var pricingSnapshots: [AIProvider: PricingSnapshot] = [:]
+    private(set) var pricingErrors: [AIProvider: String] = [:]
+    private(set) var isRefreshingPrices = false
+    private let pricingCatalog: PricingCatalog?
 
     private let historyMonitor = DirectoryChangeMonitor()
     private let limitMonitor = DirectoryChangeMonitor()
@@ -28,6 +32,7 @@ final class UsageStore {
     private var refreshingProviders: Set<AIProvider> = []
 
     init() {
+        pricingCatalog = .shared
         codexClient = CodexAppServerClient()
         anthropicService = ClaudeSessionUsageService()
         apiKeyStore = KeychainAPIKeyStore.shared
@@ -37,8 +42,10 @@ final class UsageStore {
     init(
         codexClient: any CodexUsageProviding,
         anthropicService: any AnthropicUsageProviding,
-        apiKeyStore: any APIKeyStoring
+        apiKeyStore: any APIKeyStoring,
+        pricingCatalog: PricingCatalog? = nil
     ) {
+        self.pricingCatalog = pricingCatalog
         self.codexClient = codexClient
         self.anthropicService = anthropicService
         self.apiKeyStore = apiKeyStore
@@ -93,9 +100,11 @@ final class UsageStore {
         refreshClaudeRateLimits()
         periodicRefresh = Task { @MainActor [weak self] in
             await self?.refreshAll()
+            await self?.refreshPrices()
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(60)) }
                 catch { return }
+                await self?.refreshPrices()
                 await self?.refreshAll()
             }
         }
@@ -153,6 +162,24 @@ final class UsageStore {
     }
 
     // MARK: - Refresh
+
+    func refreshPrices(force: Bool = false) async {
+        guard let pricingCatalog, !isRefreshingPrices else { return }
+        isRefreshingPrices = true
+        defer { isRefreshingPrices = false }
+        // Display cached provenance while the public document downloads run.
+        for provider in AIProvider.allCases {
+            pricingSnapshots[provider] = await pricingCatalog.snapshot(for: provider)
+        }
+        async let codexChanged = pricingCatalog.refresh(.codex, force: force)
+        async let claudeChanged = pricingCatalog.refresh(.anthropic, force: force)
+        let changed = await (codexChanged, claudeChanged)
+        for provider in AIProvider.allCases {
+            pricingSnapshots[provider] = await pricingCatalog.snapshot(for: provider)
+            pricingErrors[provider] = await pricingCatalog.error(for: provider)
+        }
+        if changed.0 || changed.1 { await refreshAll() }
+    }
 
     func refreshAll() async {
         guard !isRefreshing else { return }

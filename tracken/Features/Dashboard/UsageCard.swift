@@ -81,6 +81,7 @@ private struct UsageDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             headline
+            PricingStatusView(provider: provider)
             if provider == .anthropic {
                 Text("Claude Code history on this Mac. Input includes cache reads and writes. Costs use current API rates, not subscription charges.")
                     .font(.caption)
@@ -102,14 +103,14 @@ private struct UsageDetails: View {
             .id(provider)
 
             Divider()
-            ModelUsageList(usage: usage, tint: provider.accentColor)
-
-            Divider()
             DailyUsageList(
                 days: days,
                 tint: provider.accentColor,
                 showsBreakdown: usage.hasDetailedBreakdown
             )
+
+            Divider()
+            ModelUsageList(usage: usage, tint: provider.accentColor)
         }
     }
 

@@ -20,7 +20,8 @@ enum Format {
 
     /// Formats a USD cost, e.g. "$12.34".
     nonisolated static func cost(_ value: Double) -> String {
-        value.formatted(.currency(code: "USD"))
+        if value > 0 && value < 0.01 { return "< " + 0.01.formatted(.currency(code: "USD")) }
+        return value.formatted(.currency(code: "USD"))
     }
 
     nonisolated static func percent(_ value: Double) -> String {

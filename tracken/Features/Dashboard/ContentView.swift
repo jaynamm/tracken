@@ -33,6 +33,7 @@ struct ContentView: View {
                         .pickerStyle(.segmented)
                     }
                     summary
+                    todaySummary
                     UsageCard(provider: selectedProvider, dayCount: dayCount)
                 }
                 .padding(20)
@@ -108,6 +109,23 @@ struct ContentView: View {
                 systemImage: secondary.systemImage
             )
         }
+    }
+
+    private var todaySummary: some View {
+        let today = store.usage(for: selectedProvider)?.recentDays(count: 1).first
+        return HStack(spacing: 12) {
+            DashboardSummaryTile(
+                title: "Today’s tokens",
+                value: today.map { Format.tokens($0.totalTokens) } ?? "—",
+                systemImage: "sun.max"
+            )
+            DashboardSummaryTile(
+                title: "Today’s estimated cost (USD)",
+                value: today?.estimatedCostUSD.map(Format.cost) ?? "—",
+                systemImage: "dollarsign.circle"
+            )
+        }
+        .help("API-equivalent cost of recorded usage so far today, not a subscription charge or end-of-day forecast.")
     }
 }
 

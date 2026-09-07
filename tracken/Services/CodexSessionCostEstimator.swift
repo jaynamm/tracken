@@ -14,30 +14,35 @@ nonisolated protocol CodexSessionCostEstimating: Sendable {
 
 nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendable {
     private let sessionsURL: URL
+    private let pricingCatalog: PricingCatalog?
 
     init() {
+        pricingCatalog = .shared
         let environment = ProcessInfo.processInfo.environment
         let codexHome = environment["CODEX_HOME"].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
         sessionsURL = codexHome.appendingPathComponent("sessions", isDirectory: true)
     }
 
-    init(sessionsURL: URL) {
+    init(sessionsURL: URL, pricingCatalog: PricingCatalog? = nil) {
         self.sessionsURL = sessionsURL
+        self.pricingCatalog = pricingCatalog
     }
 
     func estimateRecentUsage(dayCount: Int, now: Date = Date()) async -> [Date: [ModelUsage]] {
         guard dayCount > 0 else { return [:] }
         let sessionsURL = sessionsURL
+        let prices = await pricingCatalog?.snapshot(for: .codex) ?? .bundled(for: .codex)
         return await Task.detached(priority: .utility) {
-            Self.loadUsage(from: sessionsURL, dayCount: dayCount, now: now)
+            Self.loadUsage(from: sessionsURL, dayCount: dayCount, now: now, prices: prices)
         }.value
     }
 
     private static func loadUsage(
         from sessionsURL: URL,
         dayCount: Int,
-        now: Date
+        now: Date,
+        prices: PricingSnapshot
     ) -> [Date: [ModelUsage]] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
@@ -61,6 +66,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
             for case let fileURL as URL in files where fileURL.pathExtension == "jsonl" {
                 loadSession(
                     at: fileURL,
+                    prices: prices,
                     cutoff: cutoff,
                     tomorrow: calendar.date(byAdding: .day, value: 1, to: today) ?? now,
                     calendar: calendar,
@@ -94,6 +100,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
 
     private static func loadSession(
         at fileURL: URL,
+        prices: PricingSnapshot,
         cutoff: Date,
         tomorrow: Date,
         calendar: Calendar,
@@ -181,7 +188,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
                 ?? "Unknown Codex model"
             let date = calendar.startOfDay(for: timestamp)
             var accumulator = accumulators[date]?[model] ?? UsageAccumulator()
-            accumulator.add(record.usage, price: CodexPrice.standardRate(for: model))
+            accumulator.add(record.usage, price: prices.rate(for: model))
             accumulators[date, default: [:]][model] = accumulator
         }
 
@@ -266,7 +273,7 @@ nonisolated private struct UsageAccumulator {
     var estimatedCostUSD = 0.0
     var hasKnownPrice = true
 
-    mutating func add(_ usage: SessionTokenUsage, price: CodexPrice?) {
+    mutating func add(_ usage: SessionTokenUsage, price: TokenPrice?) {
         let input = max(0, usage.inputTokens)
         let cached = min(input, max(0, usage.cachedInputTokens))
         let cacheWrite = min(input - cached, max(0, usage.cacheWriteInputTokens))
@@ -278,40 +285,11 @@ nonisolated private struct UsageAccumulator {
         cachedInputTokens += cached
         cacheWriteInputTokens += cacheWrite
 
-        guard let price else {
+        guard let cost = price?.cost(input: uncached, cached: cached, write: cacheWrite,
+                                     output: output, contextTokens: input) else {
             hasKnownPrice = false
             return
         }
-        let inputMultiplier = input > 272_000 ? 2.0 : 1.0
-        let outputMultiplier = input > 272_000 ? 1.5 : 1.0
-        estimatedCostUSD += (Double(uncached) / 1_000_000 * price.input
-            + Double(cached) / 1_000_000 * price.cachedInput
-            + Double(cacheWrite) / 1_000_000 * price.cacheWriteInput) * inputMultiplier
-            + Double(output) / 1_000_000 * price.output * outputMultiplier
-    }
-}
-
-nonisolated private struct CodexPrice {
-    let input: Double
-    let cachedInput: Double
-    let cacheWriteInput: Double
-    let output: Double
-
-    /// Standard API rates in USD per million tokens, checked 2026-09-07.
-    /// https://developers.openai.com/api/docs/models/gpt-5.6-sol
-    /// https://developers.openai.com/api/docs/models/gpt-5.6-terra
-    /// https://developers.openai.com/api/docs/models/gpt-5.6-luna
-    static func standardRate(for model: String) -> CodexPrice? {
-        let normalized = model.lowercased()
-        if normalized.hasPrefix("gpt-5.6-sol") {
-            return CodexPrice(input: 4, cachedInput: 0.40, cacheWriteInput: 5, output: 20)
-        }
-        if normalized.hasPrefix("gpt-5.6-terra") {
-            return CodexPrice(input: 2, cachedInput: 0.20, cacheWriteInput: 2.50, output: 12)
-        }
-        if normalized.hasPrefix("gpt-5.6-luna") {
-            return CodexPrice(input: 0.20, cachedInput: 0.02, cacheWriteInput: 0.25, output: 1.20)
-        }
-        return nil
+        estimatedCostUSD += cost
     }
 }

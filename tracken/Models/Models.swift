@@ -188,8 +188,7 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable {
             }
 
             let entries = usageByDay[date] ?? []
-            let costs = entries.compactMap(\.estimatedCostUSD)
-            let estimatedCost = costs.isEmpty ? nil : costs.reduce(0, +)
+            let estimatedCost = Self.completeDailyEstimatedCost(for: entries)
             let modelUsage = Self.aggregateModelUsage(entries.flatMap(\.modelUsage))
             if hasDetailedBreakdown {
                 return DailyUsage(
@@ -237,12 +236,22 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable {
         let models = Self.aggregateModelUsage(days.flatMap(\.modelUsage))
         return TokenUsage(provider: provider, daily: days, modelUsage: models,
                           granularity: granularity,
-                          estimatedCostUSD: Self.completeEstimatedCost(for: models),
+                          estimatedCostUSD: Self.completeDailyEstimatedCost(for: days),
                           updatedAt: updatedAt, account: account,
                           lifetimeTokens: lifetimeTokens, rateLimit: rateLimit)
     }
 
     var last14Days: [DailyUsage] { recentDays(count: 14) }
+
+    /// Empty dates cost zero; a date with unpriced usage makes the sum unavailable.
+    nonisolated static func completeDailyEstimatedCost(for days: [DailyUsage]) -> Double? {
+        guard !days.contains(where: {
+            ($0.totalTokens > 0 || !$0.modelUsage.isEmpty) && $0.estimatedCostUSD == nil
+        }) else {
+            return nil
+        }
+        return days.compactMap(\.estimatedCostUSD).reduce(0, +)
+    }
 
     /// A partial price sum must not look like an estimate for every model.
     nonisolated static func completeEstimatedCost(for models: [ModelUsage]) -> Double? {
