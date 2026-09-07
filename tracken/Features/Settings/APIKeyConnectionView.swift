@@ -21,7 +21,15 @@ struct APIKeyConnectionView: View {
         VStack(alignment: .leading, spacing: 10) {
             SettingsStatusRow(status: state.status, isWorking: isWorking)
 
-            if let usage = state.usage {
+            if case .unavailable(let message) = state.status {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Remove saved API key", role: .destructive) {
+                    store.disconnectAPIKey(provider)
+                    keyInput = ""
+                }
+            } else if let usage = state.usage {
                 connectedContent(usage)
             } else {
                 disconnectedContent

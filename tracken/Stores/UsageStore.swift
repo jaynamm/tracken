@@ -16,12 +16,13 @@ final class UsageStore {
     private let codexClient: any CodexUsageProviding
     private let anthropicService: any AnthropicUsageProviding
     private let apiKeyStore: any APIKeyStoring
+    private var refreshingProviders: Set<AIProvider> = []
 
     init() {
         codexClient = CodexAppServerClient()
-        anthropicService = DemoAnthropicUsageService()
+        anthropicService = UnavailableAnthropicUsageService()
         apiKeyStore = KeychainAPIKeyStore.shared
-        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore)
+        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore, anthropicService: anthropicService)
     }
 
     init(
@@ -32,13 +33,17 @@ final class UsageStore {
         self.codexClient = codexClient
         self.anthropicService = anthropicService
         self.apiKeyStore = apiKeyStore
-        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore)
+        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore, anthropicService: anthropicService)
     }
 
     private static func makeInitialStates(
-        apiKeyStore: any APIKeyStoring
+        apiKeyStore: any APIKeyStoring,
+        anthropicService: any AnthropicUsageProviding
     ) -> [AIProvider: ProviderState] {
         Dictionary(uniqueKeysWithValues: AIProvider.allCases.map { provider in
+            if provider == .anthropic, let reason = anthropicService.unavailabilityReason {
+                return (provider, ProviderState(status: .unavailable(reason), usage: nil))
+            }
             let hasCredential = provider.authentication.requiresAPIKey
                 && apiKeyStore.apiKey(for: provider) != nil
             return (
@@ -78,6 +83,7 @@ final class UsageStore {
 
     func connectAPIKey(_ provider: AIProvider, apiKey: String) async {
         guard provider.authentication.requiresAPIKey else { return }
+        if markUnavailableIfNeeded(provider) { return }
         apiKeyStore.setAPIKey(apiKey, for: provider)
         await refresh(provider)
     }
@@ -85,6 +91,7 @@ final class UsageStore {
     func disconnectAPIKey(_ provider: AIProvider) {
         guard provider.authentication.requiresAPIKey else { return }
         apiKeyStore.deleteAPIKey(for: provider)
+        if markUnavailableIfNeeded(provider) { return }
         setState(.disconnected, for: provider)
     }
 
@@ -115,7 +122,7 @@ final class UsageStore {
         defer { isRefreshing = false }
 
         var refreshedAnyProvider = await refreshProvider(.codex)
-        if apiKeyStore.apiKey(for: .anthropic) != nil {
+        if !markUnavailableIfNeeded(.anthropic), apiKeyStore.apiKey(for: .anthropic) != nil {
             refreshedAnyProvider = await refreshProvider(.anthropic) || refreshedAnyProvider
         }
         if refreshedAnyProvider {
@@ -129,14 +136,16 @@ final class UsageStore {
 
     @discardableResult
     private func refreshProvider(_ provider: AIProvider) async -> Bool {
+        if markUnavailableIfNeeded(provider) { return false }
+        guard refreshingProviders.insert(provider).inserted else { return false }
+        defer { refreshingProviders.remove(provider) }
         setStatus(.connecting, for: provider)
 
         do {
             let usage: TokenUsage
             switch provider {
             case .codex:
-                let fetchedUsage = try await codexClient.fetchUsage()
-                usage = reconcileRecentCodexUsage(fetchedUsage)
+                usage = try await codexClient.fetchUsage()
             case .anthropic:
                 guard let apiKey = apiKeyStore.apiKey(for: provider) else {
                     setState(.disconnected, for: provider)
@@ -150,10 +159,21 @@ final class UsageStore {
         } catch CodexAppServerError.notSignedIn where provider == .codex {
             setState(.disconnected, for: provider)
             return false
+        } catch UsageServiceError.unavailable(let reason) {
+            setState(ProviderState(status: .unavailable(reason), usage: nil), for: provider)
+            return false
         } catch {
             setStatus(.failed(Self.errorMessage(error)), for: provider)
             return false
         }
+    }
+
+    private func markUnavailableIfNeeded(_ provider: AIProvider) -> Bool {
+        guard provider == .anthropic, let reason = anthropicService.unavailabilityReason else {
+            return false
+        }
+        setState(ProviderState(status: .unavailable(reason), usage: nil), for: provider)
+        return true
     }
 
     private func setStatus(_ status: ConnectionStatus, for provider: AIProvider) {
@@ -164,52 +184,6 @@ final class UsageStore {
 
     private func setState(_ state: ProviderState, for provider: AIProvider) {
         providerStates[provider] = state
-    }
-
-    /// The lifetime summary can update before today's server-side daily bucket.
-    /// When that happens, carry the observed delta into today's total until the
-    /// authoritative daily bucket catches up on a later refresh.
-    private func reconcileRecentCodexUsage(_ latest: TokenUsage) -> TokenUsage {
-        guard
-            let previous = usage(for: .codex),
-            let previousLifetime = previous.lifetimeTokens,
-            let latestLifetime = latest.lifetimeTokens,
-            latestLifetime >= previousLifetime
-        else { return latest }
-
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let previousToday = previous.recentDays(count: 1).first?.totalTokens ?? 0
-        let latestToday = latest.recentDays(count: 1).first?.totalTokens ?? 0
-        let lifetimeDelta = latestLifetime - previousLifetime
-        let reconciledToday = max(latestToday, previousToday + lifetimeDelta)
-        guard reconciledToday > latestToday else { return latest }
-
-        let latestTodayEntry = latest.daily.first {
-            calendar.isDate($0.date, inSameDayAs: today)
-        }
-
-        var daily = latest.daily.filter {
-            !calendar.isDate($0.date, inSameDayAs: today)
-        }
-        daily.append(DailyUsage(
-            date: today,
-            totalTokens: reconciledToday,
-            estimatedCostUSD: latestTodayEntry?.estimatedCostUSD,
-            modelUsage: latestTodayEntry?.modelUsage ?? []
-        ))
-
-        return TokenUsage(
-            provider: latest.provider,
-            daily: daily,
-            modelUsage: latest.modelUsage,
-            granularity: latest.granularity,
-            estimatedCostUSD: latest.estimatedCostUSD,
-            updatedAt: latest.updatedAt,
-            account: latest.account,
-            lifetimeTokens: latest.lifetimeTokens,
-            rateLimit: latest.rateLimit
-        )
     }
 
     private static func errorMessage(_ error: Error) -> String {

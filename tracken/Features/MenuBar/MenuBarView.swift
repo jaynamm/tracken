@@ -160,6 +160,11 @@ private struct MenuBarProviderCard: View {
         }
     }
 
+    private var emptyHint: String {
+        if case .unavailable = state.status { return "Usage unavailable" }
+        return "Connect in Settings"
+    }
+
     private var emptyContent: some View {
         Group {
             if case .connecting = state.status {
@@ -173,7 +178,7 @@ private struct MenuBarProviderCard: View {
                         .fontWeight(.medium)
                         .foregroundStyle(state.status.color)
                         .lineLimit(2)
-                    Text("Connect in Settings")
+                    Text(emptyHint)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

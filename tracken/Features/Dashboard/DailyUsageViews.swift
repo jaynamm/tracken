@@ -290,8 +290,7 @@ struct ModelUsageList: View {
                 ForEach(Array(usage.modelUsage.enumerated()), id: \.element.id) { index, model in
                     ModelUsageRow(
                         model: model,
-                        tint: tint,
-                        includedInPlan: usage.provider == .codex
+                        tint: tint
                     )
                         .padding(.vertical, 8)
 
@@ -307,7 +306,6 @@ struct ModelUsageList: View {
 private struct ModelUsageRow: View {
     let model: ModelUsage
     let tint: Color
-    let includedInPlan: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -333,9 +331,9 @@ private struct ModelUsageRow: View {
                 .frame(minWidth: 72, alignment: .trailing)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(model.estimatedCostUSD.map(Format.cost) ?? (includedInPlan ? "Included" : "—"))
+                    Text(model.estimatedCostUSD.map(Format.cost) ?? "—")
                         .font(.callout.weight(.medium))
-                    Text(model.estimatedCostUSD == nil && includedInPlan ? "ChatGPT plan" : "estimated cost")
+                    Text(model.estimatedCostUSD == nil ? "Rate unavailable" : "estimated cost")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

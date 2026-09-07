@@ -220,7 +220,7 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable {
                     outputTokens: entries.compactMap(\.outputTokens).reduce(0, +),
                     cachedInputTokens: entries.reduce(0) { $0 + $1.cachedInputTokens },
                     cacheWriteInputTokens: entries.reduce(0) { $0 + $1.cacheWriteInputTokens },
-                    estimatedCostUSD: costs.isEmpty ? nil : costs.reduce(0, +)
+                    estimatedCostUSD: costs.count == entries.count ? costs.reduce(0, +) : nil
                 )
             }
             .sorted {
@@ -232,6 +232,13 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable {
     }
 
     var last14Days: [DailyUsage] { recentDays(count: 14) }
+
+    /// A partial price sum must not look like an estimate for every model.
+    nonisolated static func completeEstimatedCost(for models: [ModelUsage]) -> Double? {
+        let costs = models.compactMap(\.estimatedCostUSD)
+        guard !models.isEmpty, costs.count == models.count else { return nil }
+        return costs.reduce(0, +)
+    }
     var last14DaysInputTokens: Int { last14Days.compactMap(\.inputTokens).reduce(0, +) }
     var last14DaysOutputTokens: Int { last14Days.compactMap(\.outputTokens).reduce(0, +) }
     var last14DaysTotalTokens: Int { last14Days.reduce(0) { $0 + $1.totalTokens } }
@@ -242,6 +249,7 @@ nonisolated enum ConnectionStatus: Equatable, Sendable {
     case connecting
     case connected
     case failed(String)
+    case unavailable(String)
 
     var isConnected: Bool {
         if case .connected = self { return true }

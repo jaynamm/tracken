@@ -45,20 +45,19 @@ final class CodexAppServerClient: CodexUsageProviding {
         let officialDaily = (usage.dailyUsageBuckets ?? []).compactMap(Self.makeDailyUsage)
         let daily = Self.merge(officialDaily: officialDaily, localEstimates: estimates)
         let modelUsage = TokenUsage.aggregateModelUsage(estimates.values.flatMap { $0 })
-        let costs = modelUsage.compactMap(\.estimatedCostUSD)
 
         return TokenUsage(
             provider: .codex,
             daily: daily,
             modelUsage: modelUsage,
             granularity: .aggregate,
-            estimatedCostUSD: costs.isEmpty ? nil : costs.reduce(0, +),
+            estimatedCostUSD: TokenUsage.completeEstimatedCost(for: modelUsage),
             account: ProviderAccount(
                 email: account.email,
-                planName: account.planType ?? limits.rateLimits?.planType
+                planName: account.planType ?? limits.codexLimits?.planType
             ),
             lifetimeTokens: usage.summary?.lifetimeTokens,
-            rateLimit: limits.rateLimits?.primary.map(Self.makeRateLimit)
+            rateLimit: limits.codexLimits?.primary.map(Self.makeRateLimit)
         )
     }
 
@@ -100,19 +99,21 @@ final class CodexAppServerClient: CodexUsageProviding {
         return DailyUsage(date: date, totalTokens: bucket.tokens)
     }
 
-    private static func merge(
+    static func merge(
         officialDaily: [DailyUsage],
         localEstimates: [Date: [ModelUsage]],
         calendar: Calendar = .current
     ) -> [DailyUsage] {
-        var dailyByDate = Dictionary(uniqueKeysWithValues: officialDaily.map {
-            (calendar.startOfDay(for: $0.date), $0)
-        })
+        var dailyByDate = Dictionary(grouping: officialDaily) {
+            calendar.startOfDay(for: $0.date)
+        }.mapValues { entries in
+            DailyUsage(date: calendar.startOfDay(for: entries[0].date),
+                       totalTokens: entries.reduce(0) { $0 + $1.totalTokens })
+        }
 
         for (rawDate, models) in localEstimates {
             let date = calendar.startOfDay(for: rawDate)
-            let costs = models.compactMap(\.estimatedCostUSD)
-            let estimatedCost = costs.isEmpty ? nil : costs.reduce(0, +)
+            let estimatedCost = TokenUsage.completeEstimatedCost(for: models)
             let totalTokens = dailyByDate[date]?.totalTokens
                 ?? models.reduce(0) { $0 + $1.totalTokens }
             dailyByDate[date] = DailyUsage(
@@ -174,8 +175,11 @@ nonisolated private struct UsageResponse: Decodable {
     }
 }
 
-nonisolated private struct RateLimitsResponse: Decodable {
+nonisolated struct RateLimitsResponse: Decodable {
     let rateLimits: RateLimits?
+    let rateLimitsByLimitId: [String: RateLimits]?
+
+    var codexLimits: RateLimits? { rateLimitsByLimitId?["codex"] ?? rateLimits }
 
     nonisolated struct RateLimits: Decodable {
         let primary: Window?

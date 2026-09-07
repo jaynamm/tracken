@@ -38,6 +38,9 @@ struct UsageCard: View {
     private var placeholder: some View {
         HStack(spacing: 8) {
             switch state.status {
+            case .unavailable(let message):
+                Image(systemName: "info.circle")
+                Text(message)
             case .connecting:
                 ProgressView().controlSize(.small)
                 Text("Fetching usage…")
@@ -160,7 +163,7 @@ private struct UsageDetails: View {
             }
 
             Label(
-                "Daily totals use the account summary; model costs are local API estimates.",
+                "Daily totals use account data, with local records for missing days. Costs are local API estimates.",
                 systemImage: "clock.arrow.circlepath"
             )
             .font(.caption2)

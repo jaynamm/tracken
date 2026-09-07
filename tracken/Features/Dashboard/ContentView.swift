@@ -92,7 +92,7 @@ struct ContentView: View {
         return HStack(spacing: 12) {
             DashboardSummaryTile(
                 title: "Last 14 days",
-                value: Format.tokens(usage?.last14DaysTotalTokens ?? 0),
+                value: usage.map { Format.tokens($0.last14DaysTotalTokens) } ?? "—",
                 systemImage: "number"
             )
             DashboardSummaryTile(

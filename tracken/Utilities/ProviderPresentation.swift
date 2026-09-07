@@ -24,6 +24,7 @@ extension AIProvider {
 extension ConnectionStatus {
     var label: String {
         switch self {
+        case .unavailable: "Not supported yet"
         case .notConnected: "Not connected"
         case .connecting: "Connecting…"
         case .connected: "Connected"
@@ -33,6 +34,7 @@ extension ConnectionStatus {
 
     var symbolName: String {
         switch self {
+        case .unavailable: "info.circle"
         case .notConnected: "circle.dashed"
         case .connecting: "arrow.triangle.2.circlepath"
         case .connected: "checkmark.circle.fill"
@@ -42,6 +44,7 @@ extension ConnectionStatus {
 
     var color: Color {
         switch self {
+        case .unavailable: .secondary
         case .notConnected: .secondary
         case .connecting: .blue
         case .connected: .green

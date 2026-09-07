@@ -50,31 +50,15 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
         let timestampFormatter = ISO8601DateFormatter()
         timestampFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
-        // Include adjacent directories because session paths use a calendar date
-        // that can differ from the user's local date around midnight.
-        for offset in -1...dayCount {
-            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
-                continue
-            }
-            let components = calendar.dateComponents([.year, .month, .day], from: date)
-            guard
-                let year = components.year,
-                let month = components.month,
-                let day = components.day
-            else { continue }
-
-            let dayDirectory = sessionsURL
-                .appendingPathComponent(String(format: "%04d", year), isDirectory: true)
-                .appendingPathComponent(String(format: "%02d", month), isDirectory: true)
-                .appendingPathComponent(String(format: "%02d", day), isDirectory: true)
-
-            guard let files = try? FileManager.default.contentsOfDirectory(
-                at: dayDirectory,
-                includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
-
-            for fileURL in files where fileURL.pathExtension == "jsonl" {
+        // A resumed task keeps its original directory. Filter by record time,
+        // not the date in the path, so recent work in old tasks is included.
+        var seenResponseIDs: Set<String> = []
+        if let files = FileManager.default.enumerator(
+            at: sessionsURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for case let fileURL as URL in files where fileURL.pathExtension == "jsonl" {
                 loadSession(
                     at: fileURL,
                     cutoff: cutoff,
@@ -82,6 +66,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
                     calendar: calendar,
                     decoder: decoder,
                     timestampFormatter: timestampFormatter,
+                    seenResponseIDs: &seenResponseIDs,
                     into: &accumulators
                 )
             }
@@ -114,6 +99,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
         calendar: Calendar,
         decoder: JSONDecoder,
         timestampFormatter: ISO8601DateFormatter,
+        seenResponseIDs: inout Set<String>,
         into accumulators: inout [Date: [String: UsageAccumulator]]
     ) {
         guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return }
@@ -122,6 +108,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
         var currentModel: String?
         var records: [PendingUsageRecord] = []
         var legacyRecords: [PendingUsageRecord] = []
+        var previousLegacyTotal: SessionTokenUsage?
 
         for line in data.split(separator: 0x0A) where !line.isEmpty {
             guard let entry = try? decoder.decode(SessionEntry.self, from: Data(line)) else {
@@ -141,6 +128,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
                 }
                 records.append(PendingUsageRecord(
                     timestamp: timestamp,
+                    responseID: entry.payload.responseID,
                     turnID: entry.payload.turnID,
                     fallbackModel: currentModel,
                     usage: usage
@@ -150,8 +138,15 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
                     let timestamp = entry.timestamp,
                     let usage = entry.payload.info?.lastTokenUsage
                 else { continue }
+                // Rate-limit updates can repeat last_token_usage without a new
+                // response. An unchanged cumulative total is not new usage.
+                if let total = entry.payload.info?.totalTokenUsage {
+                    guard total != previousLegacyTotal else { continue }
+                    previousLegacyTotal = total
+                }
                 legacyRecords.append(PendingUsageRecord(
                     timestamp: timestamp,
+                    responseID: nil,
                     turnID: entry.payload.turnID,
                     fallbackModel: currentModel,
                     usage: usage
@@ -164,12 +159,22 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
         // Older Codex versions only emitted event_msg/token_count. Newer
         // versions also emit token_usage_record, so prefer the latter to avoid
         // counting the same model response twice.
-        for record in records.isEmpty ? legacyRecords : records {
+        // A task may span a CLI upgrade. Retain legacy records preceding the
+        // first modern record, but do not count its matching legacy event.
+        let firstModernDate = records.compactMap { parseTimestamp($0.timestamp) }.min()
+        let earlierLegacyRecords = legacyRecords.filter { record in
+            guard let firstModernDate else { return true }
+            guard let date = parseTimestamp(record.timestamp) else { return false }
+            return date < firstModernDate
+        }
+        for record in earlierLegacyRecords + records {
             guard
-                let timestamp = timestampFormatter.date(from: record.timestamp),
+                let timestamp = parseTimestamp(record.timestamp),
                 timestamp >= cutoff,
                 timestamp < tomorrow
             else { continue }
+            if let responseID = record.responseID, !responseID.isEmpty,
+               !seenResponseIDs.insert(responseID).inserted { continue }
 
             let model = record.turnID.flatMap { modelByTurnID[$0] }
                 ?? record.fallbackModel
@@ -178,6 +183,13 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
             var accumulator = accumulators[date]?[model] ?? UsageAccumulator()
             accumulator.add(record.usage, price: CodexPrice.standardRate(for: model))
             accumulators[date, default: [:]][model] = accumulator
+        }
+
+        func parseTimestamp(_ value: String) -> Date? {
+            if let date = timestampFormatter.date(from: value) { return date }
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            return formatter.date(from: value)
         }
     }
 }
@@ -189,6 +201,7 @@ nonisolated private struct SessionEntry: Decodable {
 
     struct Payload: Decodable {
         let turnID: String?
+        let responseID: String?
         let model: String?
         let usage: SessionTokenUsage?
         let eventType: String?
@@ -196,6 +209,7 @@ nonisolated private struct SessionEntry: Decodable {
 
         enum CodingKeys: String, CodingKey {
             case turnID = "turn_id"
+            case responseID = "response_id"
             case model
             case usage
             case eventType = "type"
@@ -204,7 +218,7 @@ nonisolated private struct SessionEntry: Decodable {
     }
 }
 
-nonisolated private struct SessionTokenUsage: Decodable {
+nonisolated private struct SessionTokenUsage: Decodable, Equatable {
     let inputTokens: Int
     let cachedInputTokens: Int
     let cacheWriteInputTokens: Int
@@ -228,14 +242,17 @@ nonisolated private struct SessionTokenUsage: Decodable {
 
 nonisolated private struct TokenCountInfo: Decodable {
     let lastTokenUsage: SessionTokenUsage?
+    let totalTokenUsage: SessionTokenUsage?
 
     enum CodingKeys: String, CodingKey {
         case lastTokenUsage = "last_token_usage"
+        case totalTokenUsage = "total_token_usage"
     }
 }
 
 nonisolated private struct PendingUsageRecord {
     let timestamp: String
+    let responseID: String?
     let turnID: String?
     let fallbackModel: String?
     let usage: SessionTokenUsage
@@ -265,10 +282,12 @@ nonisolated private struct UsageAccumulator {
             hasKnownPrice = false
             return
         }
-        estimatedCostUSD += Double(uncached) / 1_000_000 * price.input
+        let inputMultiplier = input > 272_000 ? 2.0 : 1.0
+        let outputMultiplier = input > 272_000 ? 1.5 : 1.0
+        estimatedCostUSD += (Double(uncached) / 1_000_000 * price.input
             + Double(cached) / 1_000_000 * price.cachedInput
-            + Double(cacheWrite) / 1_000_000 * price.cacheWriteInput
-            + Double(output) / 1_000_000 * price.output
+            + Double(cacheWrite) / 1_000_000 * price.cacheWriteInput) * inputMultiplier
+            + Double(output) / 1_000_000 * price.output * outputMultiplier
     }
 }
 
@@ -278,7 +297,10 @@ nonisolated private struct CodexPrice {
     let cacheWriteInput: Double
     let output: Double
 
-    /// Standard API rates in USD per million tokens, checked 2026-09-04.
+    /// Standard API rates in USD per million tokens, checked 2026-09-07.
+    /// https://developers.openai.com/api/docs/models/gpt-5.6-sol
+    /// https://developers.openai.com/api/docs/models/gpt-5.6-terra
+    /// https://developers.openai.com/api/docs/models/gpt-5.6-luna
     static func standardRate(for model: String) -> CodexPrice? {
         let normalized = model.lowercased()
         if normalized.hasPrefix("gpt-5.6-sol") {
