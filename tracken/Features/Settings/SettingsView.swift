@@ -42,8 +42,8 @@ struct SettingsView: View {
         switch provider.authentication {
         case .codexCLI:
             CodexConnectionView()
-        case .apiKey(let label):
-            APIKeyConnectionView(provider: provider, credentialLabel: label)
+        case .localSessions:
+            ClaudeHistoryConnectionView()
         }
     }
 }

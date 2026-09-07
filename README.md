@@ -3,9 +3,9 @@
 Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴 막대 앱입니다. 메인 대시보드와 메뉴 막대 팝오버에서 최근 14일 사용량과 공급자별 사용 현황을 확인할 수 있습니다.
 
 > [!IMPORTANT]
-> Codex 사용량은 로컬 Codex CLI에 로그인된 ChatGPT 계정에서 가져옵니다. Claude(Anthropic)의 실제 사용량 연동은 아직 지원하지 않습니다. 사용량과 비용은 `—`, 연결 상태는 `Not supported yet`으로 표시하며 합계에도 포함하지 않습니다. 이전 버전에 표시된 Claude 수치는 실제 사용량이 아닌 모의 데이터였습니다.
+> Codex 사용량은 로컬 Codex CLI에 로그인된 ChatGPT 계정에서 가져옵니다. Claude는 이 Mac에 저장된 Claude Code 세션의 실제 토큰 기록을 API 키 없이 읽습니다. 최근 14일·30일·전체 로컬 기록을 선택할 수 있습니다. Claude 웹과 다른 기기의 기록은 포함하지 않습니다. 이전 버전의 모의 집계는 제거되었습니다.
 >
-> Codex 비용은 실제 청구액이 아니라 로컬 세션의 모델별 토큰에 OpenAI 표준 API 단가를 적용한 참고용 예상치입니다. ChatGPT 구독료나 요금제 포함 사용량을 뜻하지 않습니다.
+> 비용은 실제 청구액이 아니라 로컬 세션의 모델별 토큰에 현재 공급자 표준 API 단가를 적용한 참고용 예상치입니다. ChatGPT·Claude 구독료나 과거 청구서를 뜻하지 않습니다.
 
 ## 실행 화면
 
@@ -25,12 +25,12 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 - 최근 14일간의 일별 토큰 차트 및 상세 목록
 - 일별 토큰과 예상 비용을 함께 표시
 - Codex 로컬 세션을 기반으로 일자별·모델별 토큰과 API 환산 예상 비용 표시
-- Codex 사용 한도·초기화 시각 표시 및 Claude 연동 미지원 상태 안내
+- Codex 사용 한도·초기화 시각 및 Claude Code의 과거 일별·모델별 사용량 표시
 - 메뉴 막대에서 공급자별 사용량 빠르게 확인
 - 전체 또는 공급자별 사용량 새로고침
 - Codex CLI의 기존 ChatGPT 로그인 재사용
 - 이전 버전에서 macOS 키체인에 저장한 Anthropic API 키 제거
-- 연결 해제 시 계정 세션 또는 저장된 키와 해당 공급자의 사용량 제거
+- 저장된 과거 기록이 없는 날짜는 0으로 표시하고, 기록 경로가 없거나 읽지 못하면 상태 안내
 
 ## 요구 사항
 
@@ -38,6 +38,7 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 - Swift 5
 - 프로젝트를 빌드할 수 있는 Xcode
 - Codex 사용량 연동 시 로컬 Codex CLI
+- Claude 과거 사용량 조회 시 로컬 Claude Code 세션 기록
 
 배포 대상 버전은 Xcode 프로젝트의 `MACOSX_DEPLOYMENT_TARGET` 설정을 따릅니다.
 
@@ -63,12 +64,12 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 ## 사용 방법
 
 1. 메인 화면의 톱니바퀴 버튼을 누르거나 macOS 설정 단축키 `⌘,`로 설정을 엽니다.
-2. Codex는 **Connect with ChatGPT**를 눌러 로컬 Codex CLI 계정을 연결합니다. Claude는 실제 사용량 연동이 구현될 때까지 미지원 상태로 표시됩니다.
-3. 대시보드에서 공급자를 선택해 최근 14일 사용량을 확인합니다.
+2. Codex는 **Connect with ChatGPT**를 눌러 로컬 Codex CLI 계정을 연결합니다. Claude Code의 로컬 기록은 API 키 입력 없이 자동으로 불러옵니다.
+3. 대시보드에서 공급자를 선택합니다. Claude는 최근 14일·30일·전체 로컬 기록 중 조회 기간을 선택할 수 있습니다.
 4. 새로고침 버튼으로 연결된 공급자의 데이터를 다시 불러옵니다.
-5. 연결을 해제하려면 설정에서 Codex의 **Sign out** 또는 Anthropic의 **Remove saved API key**를 누릅니다.
+5. Codex 연결 해제는 **Sign out**, Claude 기록 재조회는 **Reload history**를 누릅니다. 이전 Anthropic API 키는 **Remove old API key**로 삭제할 수 있습니다.
 
-Claude 설정에서는 새 API 키를 입력받지 않습니다. 이전 버전의 저장된 키는 **Remove saved API key**로 삭제할 수 있습니다. 조회 미지원 상태는 사용량이 0이라는 뜻이 아닙니다.
+Claude의 과거 기록은 그대로 보존됩니다. API 키 삭제는 로컬 사용 기록을 지우거나 조회를 끄지 않습니다. 메뉴 막대의 공급자별 사용량과 합계는 대시보드에서 선택한 기간과 관계없이 최근 14일 기준입니다.
 
 ## 프로젝트 구조
 
@@ -79,7 +80,7 @@ Claude 설정에서는 새 API 키를 입력받지 않습니다. 이전 버전�
     ├── Features/
     │   ├── Dashboard/           # 화면, 사용량 카드, 일별 차트
     │   ├── MenuBar/             # 메뉴 막대 팝오버
-    │   └── Settings/            # Codex/API 키 연결 화면
+    │   └── Settings/            # Codex 연결 및 Claude 기록 설정
     ├── Models/                  # UI와 독립적인 도메인 모델
     ├── Services/                # App Server, 사용량, 키체인 접근
     ├── Stores/                  # 앱 상태 및 새로고침 조정
@@ -90,9 +91,9 @@ Claude 설정에서는 새 API 키를 입력받지 않습니다. 이전 버전�
 ## 기술 구성
 
 - SwiftUI: 메인 창, 설정 창, 메뉴 막대 UI
-- Swift Charts: 최근 14일 토큰 사용량 시각화
+- Swift Charts: 선택한 기간의 일별 토큰 사용량 시각화
 - Observation: 공유 사용량 및 연결 상태 관리
-- Security/Keychain Services: 공급자 API 키 저장
+- Security/Keychain Services: 이전 버전의 저장된 API 키 제거
 - Swift Concurrency: 공급자별 비동기 새로고침
 
 ## 공급자 연동 상태
@@ -105,13 +106,15 @@ Codex의 누적 토큰 증가분은 오늘 사용량으로 임의 배분하지 �
 
 로컬 기록은 대화 생성 날짜와 관계없이 조회 기간 안의 토큰 이벤트를 집계합니다. 중복 응답 ID와 누적값이 같은 구형 알림은 한 번만 계산합니다. 알려진 GPT-5.6 모델의 272K 초과 입력에는 긴 컨텍스트 단가를 적용하며, 단가를 모르는 모델이 포함된 합계는 `—`로 표시합니다. 개별 모델의 단가 미지원 상태를 구독에 포함된 비용으로 표시하지 않습니다.
 
-Anthropic은 `tracken/Services/UsageService.swift`의 `UnavailableAnthropicUsageService`를 사용합니다. 실제 API 요청이나 모의 데이터 생성 없이 미지원 상태를 반환합니다. 저장된 API 키가 있어도 연결 성공으로 처리하지 않으며 토큰·비용을 생성하지 않습니다.
+Claude는 `ClaudeSessionUsageService.swift`가 [Claude Code 로컬 세션](https://code.claude.com/docs/en/sessions)의 `~/.claude/projects/**/*.jsonl`에서 타임스탬프, 응답 ID, 모델명, 사용량 메타데이터를 읽습니다. `CLAUDE_CONFIG_DIR` 환경 변수가 설정된 경우 해당 디렉터리 아래의 `projects`를 사용합니다. 기록 읽기는 모델 호출을 발생시키지 않습니다.
 
-향후 실제 연동을 추가할 때는 `AnthropicUsageProviding` 구현을 교체하고 인증 방식, 조회 기간, 페이지네이션, 공급자 응답 집계와 오류 처리를 구현해야 합니다.
+같은 응답의 여러 콘텐츠 블록이나 복사된 세션은 메시지 ID와 요청 ID로 중복을 제거하고, 스트리밍 중 늘어난 출력 토큰은 최종값을 한 번만 반영합니다. Claude의 입력 합계는 일반 입력·캐시 읽기·캐시 생성 토큰을 합한 값입니다. 캐시 생성 비용에는 5분·1시간 TTL을 구분합니다. [현재 Anthropic 단가](https://platform.claude.com/docs/en/about-claude/pricing)를 확인한 Sonnet 5, Opus 5, Opus 4.8, Fable 5의 표준 모드를 계산하며, 미등록 모델이나 가격 모드는 토큰을 표시하되 비용은 `—`로 남깁니다.
+
+전체 로컬 기록은 현재 Mac에 남아 있는 파일 범위입니다. 삭제된 기록, Claude 웹 채팅, 다른 기기에서만 사용한 내역을 계정 API로 복구하는 기능은 제공하지 않습니다. 기록이 있는 과거 날짜는 보존하고 사용하지 않은 오늘에 과거 사용량을 배분하지 않습니다.
 
 ## 보안 참고 사항
 
-Codex의 OAuth 인증 정보는 로컬 Codex CLI가 관리하며 앱으로 전달되지 않습니다. 비용 계산기는 로컬 세션에서 필요한 메타데이터만 디코딩하고 외부로 전송하거나 별도로 저장하지 않습니다. 이전 버전의 Anthropic API 키는 서비스 식별자 `com.tracken.apikeys`로 macOS 키체인에 저장되어 있으며 설정에서 삭제할 수 있습니다. 현재 Anthropic 구현은 저장된 키를 조회하거나 외부로 전송하지 않고, 새 키도 저장하지 않습니다.
+Codex의 OAuth 인증 정보는 로컬 Codex CLI가 관리하며 앱으로 전달되지 않습니다. Codex와 Claude의 사용량 계산기는 로컬 세션에서 필요한 메타데이터만 디코딩하고 외부로 전송하거나 별도로 저장하지 않습니다. 이전 버전의 Anthropic API 키는 서비스 식별자 `com.tracken.apikeys`로 macOS 키체인에 저장되어 있으며 설정에서 삭제할 수 있습니다. 현재 Anthropic 구현은 저장된 키를 조회하거나 외부로 전송하지 않고, 새 키도 저장하지 않습니다.
 
 ## 집계 검증 및 빌드
 

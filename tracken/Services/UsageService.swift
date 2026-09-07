@@ -7,30 +7,16 @@ import Foundation
 
 nonisolated enum UsageServiceError: LocalizedError {
     case unavailable(String)
+    case historyReadFailed
 
     var errorDescription: String? {
         switch self {
         case .unavailable(let message): message
+        case .historyReadFailed: "Could not read Claude Code history. Check access to the local projects folder and try again."
         }
     }
 }
 
-nonisolated protocol AnthropicUsageProviding {
-    var unavailabilityReason: String? { get }
-    func fetchUsage(apiKey: String) async throws -> TokenUsage
-}
-
-nonisolated extension AnthropicUsageProviding {
-    var unavailabilityReason: String? { nil }
-}
-
-/// Never substitute generated tokens for usage that has not been measured.
-nonisolated struct UnavailableAnthropicUsageService: AnthropicUsageProviding {
-    private let message = "Claude usage is not supported yet. Previously displayed demo tokens and costs were not actual usage."
-
-    var unavailabilityReason: String? { message }
-
-    func fetchUsage(apiKey: String) async throws -> TokenUsage {
-        throw UsageServiceError.unavailable(message)
-    }
+nonisolated protocol AnthropicUsageProviding: Sendable {
+    func fetchUsage() async throws -> TokenUsage
 }

@@ -24,7 +24,7 @@ extension AIProvider {
 extension ConnectionStatus {
     var label: String {
         switch self {
-        case .unavailable: "Not supported yet"
+        case .unavailable: "No local history"
         case .notConnected: "Not connected"
         case .connecting: "Connecting…"
         case .connected: "Connected"

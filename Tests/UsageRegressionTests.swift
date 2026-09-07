@@ -31,12 +31,19 @@ nonisolated private final class MemoryKeys: APIKeyStoring {
     func logout() async throws {}
 }
 
+nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
+    func fetchUsage() async throws -> TokenUsage {
+        TokenUsage(provider: .anthropic, daily: [])
+    }
+}
+
 @main struct UsageRegressionTests {
     @MainActor static func main() async throws {
         try await checkStore()
         try checkMergeAndLimits()
         try await checkSessionRecords()
-        print("PASS: usage store, Claude exclusion, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")
+        try checkClaudeHistory()
+        print("PASS: usage store, Claude local history, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")
     }
 
     @MainActor private static func checkStore() async throws {
@@ -45,7 +52,7 @@ nonisolated private final class MemoryKeys: APIKeyStoring {
         let first = TokenUsage(provider: .codex, daily: [DailyUsage(date: today, totalTokens: 100)], granularity: .aggregate, lifetimeTokens: 1_000)
         let client = FakeCodex(first)
         let keys = MemoryKeys()
-        let store = UsageStore(codexClient: client, anthropicService: UnavailableAnthropicUsageService(), apiKeyStore: keys)
+        let store = UsageStore(codexClient: client, anthropicService: EmptyClaudeHistory(), apiKeyStore: keys)
         await store.refreshAll()
         // A late update belongs to yesterday, not today.
         client.usage = TokenUsage(provider: .codex, daily: [
@@ -65,14 +72,13 @@ nonisolated private final class MemoryKeys: APIKeyStoring {
         async let two: Void = store.refresh(.codex)
         _ = await (one, two)
         try expect(client.fetchCount == before + 1, "Overlapping refreshes must not race")
-        await store.connectAPIKey(.anthropic, apiKey: "must-not-save")
         await store.refresh(.anthropic)
-        guard case .unavailable = store.status(for: .anthropic) else {
-            throw CheckFailure(description: "Claude must stay unavailable")
+        guard case .connected = store.status(for: .anthropic) else {
+            throw CheckFailure(description: "Claude history must load without an API key")
         }
-        try expect(store.usage(for: .anthropic) == nil && keys.reads == 0 && keys.writes == 0,
-                   "Saved keys must not enable demo usage")
-        store.disconnectAPIKey(.anthropic)
+        try expect(store.usage(for: .anthropic)?.totalTokens == 0 && keys.reads == 0 && keys.writes == 0,
+                   "Local history must not read keys or generate demo usage")
+        store.removeSavedAnthropicAPIKey()
         try expect(keys.value == nil, "Old keys can still be removed")
     }
 
@@ -162,5 +168,48 @@ nonisolated private final class MemoryKeys: APIKeyStoring {
             try expect(abs((usage.first?.estimatedCostUSD ?? -1) - (100 * inputRate + 10 * outputRate) / 1_000_000) < 1e-10,
                        "Standard pricing for \(model)")
         }
+    }
+
+    @MainActor private static func checkClaudeHistory() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("claude-history-test-\(UUID().uuidString)")
+        try fm.createDirectory(at: root.appendingPathComponent("project/subagents"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let formatter = ISO8601DateFormatter()
+        let now = formatter.date(from: "2026-09-07T12:00:00Z")!
+        func record(_ id: String, model: String = "claude-sonnet-5", at date: String = "2026-09-03T12:00:00Z", output: Int = 40, type: String = "assistant") -> [String: Any] {
+            ["type": type, "timestamp": date, "requestId": "request-" + id,
+             "message": ["id": id, "model": model, "usage": [
+                "input_tokens": 10, "cache_read_input_tokens": 20,
+                "cache_creation_input_tokens": 30, "output_tokens": output,
+                "cache_creation": ["ephemeral_1h_input_tokens": 20]
+             ]]]
+        }
+        func write(_ name: String, _ rows: [[String: Any]]) throws {
+            var data = Data()
+            for row in rows { data.append(try JSONSerialization.data(withJSONObject: row)); data.append(10) }
+            data.append(Data("{incomplete trailing line".utf8))
+            try data.write(to: root.appendingPathComponent(name))
+        }
+        try write("project/a.jsonl", [record("one", output: 5), record("one"), record("old", at: "2026-07-02T12:00:00Z"),
+                                      record("fake", model: "<synthetic>"), record("user", type: "user"),
+                                      record("future", at: "2026-09-08T12:00:00Z")])
+        try write("project/subagents/copy.jsonl", [record("one")])
+        let usage = try ClaudeSessionUsageService.loadUsage(at: root, now: now)
+        try expect(usage.totalTokens == 200, "Repeated content blocks and copied records count once")
+        try expect(usage.modelUsage.first?.inputTokens == 120, "Claude input includes cache read and creation tokens")
+        try expect(usage.modelUsage.first?.outputTokens == 80, "Keep final streaming output count")
+        try expect(usage.recentDays(count: 1, now: now).first?.totalTokens == 0, "No Claude use today must display zero")
+        let recent = usage.displayUsage(dayCount: 14, now: now)
+        try expect(recent.totalTokens == 100 && recent.modelUsage.first?.totalTokens == 100, "Date filter must also filter model totals")
+        try expect(usage.displayUsage(dayCount: nil, now: now).totalTokens == 200, "All history preserves older records")
+        try expect(abs((recent.estimatedCostUSD ?? -1) - 0.000529) < 1e-10, "Cache TTL pricing uses separate 5-minute and 1-hour rates")
+        try write("unknown.jsonl", [record("unknown", model: "unpriced-model")])
+        let unknown = try ClaudeSessionUsageService.loadUsage(at: root, now: now)
+        try expect(unknown.totalTokens == 300 && unknown.estimatedCostUSD == nil, "Unknown model usage is retained without inventing prices")
+        do {
+            _ = try ClaudeSessionUsageService.loadUsage(at: root.appendingPathComponent("missing"), now: now)
+            throw CheckFailure(description: "Missing history must report unavailable")
+        } catch UsageServiceError.unavailable { }
     }
 }

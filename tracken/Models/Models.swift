@@ -28,14 +28,14 @@ nonisolated enum AIProvider: String, CaseIterable, Identifiable, Sendable {
     var authentication: ProviderAuthentication {
         switch self {
         case .codex: .codexCLI
-        case .anthropic: .apiKey(label: "Anthropic API Key")
+        case .anthropic: .localSessions
         }
     }
 }
 
 nonisolated enum ProviderAuthentication: Equatable, Sendable {
     case codexCLI
-    case apiKey(label: String)
+    case localSessions
 }
 
 nonisolated struct DailyUsage: Identifiable, Equatable, Sendable {
@@ -229,6 +229,17 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable {
                 }
                 return $0.totalTokens > $1.totalTokens
             }
+    }
+
+    func displayUsage(dayCount: Int?, now: Date = Date()) -> TokenUsage {
+        let days = dayCount.map { recentDays(count: $0, now: now) }
+            ?? daily.sorted { $0.date > $1.date }
+        let models = Self.aggregateModelUsage(days.flatMap(\.modelUsage))
+        return TokenUsage(provider: provider, daily: days, modelUsage: models,
+                          granularity: granularity,
+                          estimatedCostUSD: Self.completeEstimatedCost(for: models),
+                          updatedAt: updatedAt, account: account,
+                          lifetimeTokens: lifetimeTokens, rateLimit: rateLimit)
     }
 
     var last14Days: [DailyUsage] { recentDays(count: 14) }

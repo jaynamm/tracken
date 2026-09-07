@@ -10,6 +10,11 @@ struct ContentView: View {
 
     @State private var showingSettings = false
     @State private var selectedProvider: AIProvider = .codex
+    @State private var claudeHistoryDays = 14
+
+    private var dayCount: Int? {
+        selectedProvider == .anthropic ? (claudeHistoryDays == 0 ? nil : claudeHistoryDays) : 14
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,8 +24,16 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     providerPicker
+                    if selectedProvider == .anthropic {
+                        Picker("History period", selection: $claudeHistoryDays) {
+                            Text("Last 14 days").tag(14)
+                            Text("Last 30 days").tag(30)
+                            Text("All local history").tag(0)
+                        }
+                        .pickerStyle(.segmented)
+                    }
                     summary
-                    UsageCard(provider: selectedProvider)
+                    UsageCard(provider: selectedProvider, dayCount: dayCount)
                 }
                 .padding(20)
             }
@@ -86,13 +99,13 @@ struct ContentView: View {
     }
 
     private var summary: some View {
-        let usage = store.usage(for: selectedProvider)
+        let usage = store.usage(for: selectedProvider)?.displayUsage(dayCount: dayCount)
         let secondary = SecondarySummary(provider: selectedProvider, usage: usage)
 
         return HStack(spacing: 12) {
             DashboardSummaryTile(
-                title: "Last 14 days",
-                value: usage.map { Format.tokens($0.last14DaysTotalTokens) } ?? "—",
+                title: dayCount.map { "Last \($0) days" } ?? "All local history",
+                value: usage.map { Format.tokens($0.totalTokens) } ?? "—",
                 systemImage: "number"
             )
             DashboardSummaryTile(

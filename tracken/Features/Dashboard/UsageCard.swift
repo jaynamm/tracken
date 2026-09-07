@@ -8,6 +8,7 @@ import SwiftUI
 struct UsageCard: View {
     @Environment(UsageStore.self) private var store
     let provider: AIProvider
+    let dayCount: Int?
 
     private var state: ProviderState { store.state(for: provider) }
 
@@ -22,7 +23,7 @@ struct UsageCard: View {
             }
 
             if let usage = state.usage {
-                UsageDetails(usage: usage)
+                UsageDetails(usage: usage.displayUsage(dayCount: dayCount))
             } else {
                 placeholder
             }
@@ -51,10 +52,10 @@ struct UsageCard: View {
             case .notConnected, .connected:
                 Image(systemName: provider == .codex
                       ? "person.crop.circle.badge.checkmark"
-                      : "key.horizontal")
+                      : "folder")
                 Text(provider == .codex
                      ? "Connect your ChatGPT account in Settings to see Codex usage."
-                     : "Add an API key in Settings to see usage.")
+                     : "Local Claude Code history is loaded automatically. Reload it in Settings.")
             }
             Spacer()
         }
@@ -69,11 +70,18 @@ private struct UsageDetails: View {
     let usage: TokenUsage
 
     private var provider: AIProvider { usage.provider }
-    private var days: [DailyUsage] { usage.last14Days }
+    private var days: [DailyUsage] { usage.daily }
+    private var inputTokens: Int { days.compactMap(\.inputTokens).reduce(0, +) }
+    private var outputTokens: Int { days.compactMap(\.outputTokens).reduce(0, +) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             headline
+            if provider == .anthropic {
+                Text("Claude Code history on this Mac. Input includes cache reads and writes. Costs use current API rates, not subscription charges.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if usage.hasDetailedBreakdown {
                 detailedSummary
@@ -103,7 +111,7 @@ private struct UsageDetails: View {
 
     private var headline: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(Format.tokens(usage.last14DaysTotalTokens))
+            Text(Format.tokens(usage.totalTokens))
                 .font(.system(.largeTitle, design: .rounded).weight(.bold))
                 .contentTransition(.numericText())
             Text("tokens")
@@ -128,15 +136,15 @@ private struct UsageDetails: View {
     private var detailedSummary: some View {
         VStack(spacing: 10) {
             TokenSplitBar(
-                input: usage.last14DaysInputTokens,
-                output: usage.last14DaysOutputTokens,
+                input: inputTokens,
+                output: outputTokens,
                 tint: provider.accentColor
             )
 
             HStack {
-                UsageMetric(title: "Input", value: Format.tokens(usage.last14DaysInputTokens))
+                UsageMetric(title: "Input", value: Format.tokens(inputTokens))
                 Spacer()
-                UsageMetric(title: "Output", value: Format.tokens(usage.last14DaysOutputTokens))
+                UsageMetric(title: "Output", value: Format.tokens(outputTokens))
                 Spacer()
                 UpdatedLabel(date: usage.updatedAt)
             }

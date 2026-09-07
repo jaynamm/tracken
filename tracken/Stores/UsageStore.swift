@@ -20,9 +20,9 @@ final class UsageStore {
 
     init() {
         codexClient = CodexAppServerClient()
-        anthropicService = UnavailableAnthropicUsageService()
+        anthropicService = ClaudeSessionUsageService()
         apiKeyStore = KeychainAPIKeyStore.shared
-        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore, anthropicService: anthropicService)
+        providerStates = Self.makeInitialStates()
     }
 
     init(
@@ -33,24 +33,11 @@ final class UsageStore {
         self.codexClient = codexClient
         self.anthropicService = anthropicService
         self.apiKeyStore = apiKeyStore
-        providerStates = Self.makeInitialStates(apiKeyStore: apiKeyStore, anthropicService: anthropicService)
+        providerStates = Self.makeInitialStates()
     }
 
-    private static func makeInitialStates(
-        apiKeyStore: any APIKeyStoring,
-        anthropicService: any AnthropicUsageProviding
-    ) -> [AIProvider: ProviderState] {
-        Dictionary(uniqueKeysWithValues: AIProvider.allCases.map { provider in
-            if provider == .anthropic, let reason = anthropicService.unavailabilityReason {
-                return (provider, ProviderState(status: .unavailable(reason), usage: nil))
-            }
-            let hasCredential = provider.authentication.requiresAPIKey
-                && apiKeyStore.apiKey(for: provider) != nil
-            return (
-                provider,
-                ProviderState(status: hasCredential ? .connected : .notConnected, usage: nil)
-            )
-        })
+    private static func makeInitialStates() -> [AIProvider: ProviderState] {
+        Dictionary(uniqueKeysWithValues: AIProvider.allCases.map { ($0, .disconnected) })
     }
 
     func state(for provider: AIProvider) -> ProviderState {
@@ -81,18 +68,8 @@ final class UsageStore {
 
     // MARK: - Connections
 
-    func connectAPIKey(_ provider: AIProvider, apiKey: String) async {
-        guard provider.authentication.requiresAPIKey else { return }
-        if markUnavailableIfNeeded(provider) { return }
-        apiKeyStore.setAPIKey(apiKey, for: provider)
-        await refresh(provider)
-    }
-
-    func disconnectAPIKey(_ provider: AIProvider) {
-        guard provider.authentication.requiresAPIKey else { return }
-        apiKeyStore.deleteAPIKey(for: provider)
-        if markUnavailableIfNeeded(provider) { return }
-        setState(.disconnected, for: provider)
+    func removeSavedAnthropicAPIKey() {
+        apiKeyStore.deleteAPIKey(for: .anthropic)
     }
 
     func connectCodex() async {
@@ -122,9 +99,7 @@ final class UsageStore {
         defer { isRefreshing = false }
 
         var refreshedAnyProvider = await refreshProvider(.codex)
-        if !markUnavailableIfNeeded(.anthropic), apiKeyStore.apiKey(for: .anthropic) != nil {
-            refreshedAnyProvider = await refreshProvider(.anthropic) || refreshedAnyProvider
-        }
+        refreshedAnyProvider = await refreshProvider(.anthropic) || refreshedAnyProvider
         if refreshedAnyProvider {
             lastRefreshed = Date()
         }
@@ -136,7 +111,6 @@ final class UsageStore {
 
     @discardableResult
     private func refreshProvider(_ provider: AIProvider) async -> Bool {
-        if markUnavailableIfNeeded(provider) { return false }
         guard refreshingProviders.insert(provider).inserted else { return false }
         defer { refreshingProviders.remove(provider) }
         setStatus(.connecting, for: provider)
@@ -147,11 +121,7 @@ final class UsageStore {
             case .codex:
                 usage = try await codexClient.fetchUsage()
             case .anthropic:
-                guard let apiKey = apiKeyStore.apiKey(for: provider) else {
-                    setState(.disconnected, for: provider)
-                    return false
-                }
-                usage = try await anthropicService.fetchUsage(apiKey: apiKey)
+                usage = try await anthropicService.fetchUsage()
             }
 
             setState(ProviderState(status: .connected, usage: usage), for: provider)
@@ -168,14 +138,6 @@ final class UsageStore {
         }
     }
 
-    private func markUnavailableIfNeeded(_ provider: AIProvider) -> Bool {
-        guard provider == .anthropic, let reason = anthropicService.unavailabilityReason else {
-            return false
-        }
-        setState(ProviderState(status: .unavailable(reason), usage: nil), for: provider)
-        return true
-    }
-
     private func setStatus(_ status: ConnectionStatus, for provider: AIProvider) {
         var state = state(for: provider)
         state.status = status
@@ -188,13 +150,6 @@ final class UsageStore {
 
     private static func errorMessage(_ error: Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-    }
-}
-
-private extension ProviderAuthentication {
-    var requiresAPIKey: Bool {
-        if case .apiKey = self { return true }
-        return false
     }
 }
 

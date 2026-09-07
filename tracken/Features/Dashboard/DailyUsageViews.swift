@@ -136,7 +136,7 @@ struct DailyUsageList: View {
             .padding(.bottom, 8)
 
             if days.contains(where: { !$0.modelUsage.isEmpty }) {
-                Text("Model costs are API-equivalent estimates from local Codex session metadata.")
+                Text("Model costs are API-equivalent estimates from local session metadata.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 4)

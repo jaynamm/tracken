@@ -154,13 +154,14 @@ private struct MenuBarProviderCard: View {
             )
         case .anthropic:
             CompactMetric(
-                title: "Today cost",
+                title: "Today est.",
                 value: usage.last14Days.first?.estimatedCostUSD.map(Format.cost) ?? "—"
             )
         }
     }
 
     private var emptyHint: String {
+        if provider == .anthropic { return "Reload local history in Settings" }
         if case .unavailable = state.status { return "Usage unavailable" }
         return "Connect in Settings"
     }
