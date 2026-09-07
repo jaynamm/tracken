@@ -11,6 +11,11 @@ struct ClaudeHistoryConnectionView: View {
             Text("Reads saved usage from this Mac automatically. No API key is needed. Claude web and other devices are not included.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Label(store.isMonitoringClaude ? "Watching for history changes, even with the window closed" : "Periodic history refresh",
+                  systemImage: "waveform.path")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ClaudeLimitsView(compact: true)
             SettingsStatusRow(status: store.status(for: .anthropic), isWorking: isWorking)
             if case .unavailable(let message) = store.status(for: .anthropic) {
                 Text(message).font(.caption).foregroundStyle(.secondary)

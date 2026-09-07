@@ -9,11 +9,20 @@ import SwiftUI
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let store = UsageStore()
+
     private let singleInstanceCoordinator = SingleInstanceCoordinator()
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         singleInstanceCoordinator.terminatePreviousInstances()
         NSApp.setActivationPolicy(.accessory)
+    }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        store.startMonitoring()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        store.stopMonitoring()
     }
 }
 
@@ -21,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct trackenApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-    @State private var store = UsageStore()
+    private var store: UsageStore { appDelegate.store }
 
     var body: some Scene {
         WindowGroup(id: "main") {

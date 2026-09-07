@@ -43,6 +43,7 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
         try checkMergeAndLimits()
         try await checkSessionRecords()
         try checkClaudeHistory()
+        try await RealtimeUsageTests.run()
         print("PASS: usage store, Claude local history, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")
     }
 

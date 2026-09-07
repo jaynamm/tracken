@@ -19,6 +19,8 @@ struct MenuBarView: View {
                 }
             }
 
+            ClaudeLimitsView(compact: true)
+
             if !store.connectedProviders.isEmpty {
                 combinedUsage
             }

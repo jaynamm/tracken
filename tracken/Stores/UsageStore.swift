@@ -12,6 +12,15 @@ final class UsageStore {
     private(set) var providerStates: [AIProvider: ProviderState]
     private(set) var isRefreshing = false
     private(set) var lastRefreshed: Date?
+    private(set) var claudeRateLimits: ClaudeRateLimitSnapshot?
+    private(set) var claudeRateLimitError: String?
+    private(set) var isMonitoringClaude = false
+
+    private let historyMonitor = DirectoryChangeMonitor()
+    private let limitMonitor = DirectoryChangeMonitor()
+    private var periodicRefresh: Task<Void, Never>?
+    private var pendingClaudeRefresh = false
+    private var rateLimitService = ClaudeRateLimitService()
 
     private let codexClient: any CodexUsageProviding
     private let anthropicService: any AnthropicUsageProviding
@@ -66,6 +75,58 @@ final class UsageStore {
         }
     }
 
+    // MARK: - App lifetime monitoring
+
+    func startMonitoring(
+        projectsURL: URL = ClaudeSessionUsageService().projectsURL,
+        limitsDirectory: URL = ClaudeRateLimitService.defaultDirectory
+    ) {
+        guard periodicRefresh == nil else { return }
+        rateLimitService = ClaudeRateLimitService(directory: limitsDirectory)
+        try? FileManager.default.createDirectory(at: limitsDirectory, withIntermediateDirectories: true)
+        isMonitoringClaude = historyMonitor.start(directory: projectsURL) { [weak self] in
+            self?.claudeHistoryDidChange()
+        }
+        _ = limitMonitor.start(directory: limitsDirectory) { [weak self] in
+            self?.refreshClaudeRateLimits()
+        }
+        refreshClaudeRateLimits()
+        periodicRefresh = Task { @MainActor [weak self] in
+            await self?.refreshAll()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) }
+                catch { return }
+                await self?.refreshAll()
+            }
+        }
+    }
+
+    func stopMonitoring() {
+        historyMonitor.stop()
+        limitMonitor.stop()
+        periodicRefresh?.cancel()
+        periodicRefresh = nil
+        isMonitoringClaude = false
+    }
+
+    private func claudeHistoryDidChange() {
+        if refreshingProviders.contains(.anthropic) {
+            pendingClaudeRefresh = true
+        } else {
+            Task { await refresh(.anthropic) }
+        }
+    }
+
+    func refreshClaudeRateLimits() {
+        do {
+            claudeRateLimits = try rateLimitService.read()
+            claudeRateLimitError = nil
+        } catch {
+            claudeRateLimits = nil
+            claudeRateLimitError = "Could not read Claude limits. Waiting for the next status-line update."
+        }
+    }
+
     // MARK: - Connections
 
     func removeSavedAnthropicAPIKey() {
@@ -98,21 +159,31 @@ final class UsageStore {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        var refreshedAnyProvider = await refreshProvider(.codex)
-        refreshedAnyProvider = await refreshProvider(.anthropic) || refreshedAnyProvider
+        refreshClaudeRateLimits()
+        async let codexRefreshed = refreshProvider(.codex)
+        async let claudeRefreshed = refreshProvider(.anthropic)
+        let results = await (codexRefreshed, claudeRefreshed)
+        let refreshedAnyProvider = results.0 || results.1
         if refreshedAnyProvider {
             lastRefreshed = Date()
         }
     }
 
     func refresh(_ provider: AIProvider) async {
+        if provider == .anthropic { refreshClaudeRateLimits() }
         _ = await refreshProvider(provider)
     }
 
     @discardableResult
     private func refreshProvider(_ provider: AIProvider) async -> Bool {
         guard refreshingProviders.insert(provider).inserted else { return false }
-        defer { refreshingProviders.remove(provider) }
+        defer {
+            refreshingProviders.remove(provider)
+            if provider == .anthropic, pendingClaudeRefresh {
+                pendingClaudeRefresh = false
+                Task { await refresh(.anthropic) }
+            }
+        }
         setStatus(.connecting, for: provider)
 
         do {

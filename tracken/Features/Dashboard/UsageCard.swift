@@ -22,6 +22,10 @@ struct UsageCard: View {
                 ConnectionStatusBadge(status: state.status)
             }
 
+            if provider == .anthropic {
+                ClaudeLimitsView()
+                Divider()
+            }
             if let usage = state.usage {
                 UsageDetails(usage: usage.displayUsage(dayCount: dayCount))
             } else {
