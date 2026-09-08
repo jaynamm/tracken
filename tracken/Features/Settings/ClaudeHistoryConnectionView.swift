@@ -16,6 +16,9 @@ struct ClaudeHistoryConnectionView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ClaudeLimitsView(compact: true)
+            Text("Usage history and subscription limits are collected separately. Saved VS Code conversations can provide token history even when no terminal status-line limits have arrived.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             SettingsStatusRow(status: store.status(for: .anthropic), isWorking: isWorking)
             if case .unavailable(let message) = store.status(for: .anthropic) {
                 Text(message).font(.caption).foregroundStyle(.secondary)

@@ -23,7 +23,9 @@ struct ClaudeLimitsView: View {
                             .foregroundStyle(.orange)
                     }
                 } else {
-                    Text("Waiting for Claude Code. Limits arrive after a response in a Pro/Max session.")
+                    Text("No limits received from the Claude Code terminal status line yet.")
+                        .foregroundStyle(.secondary)
+                    Text("VS Code chat usage alone may not send this data. With the status-line bridge configured, run claude in a terminal, receive a Pro/Max response, then refresh tracken.")
                         .foregroundStyle(.secondary)
                 }
             }
