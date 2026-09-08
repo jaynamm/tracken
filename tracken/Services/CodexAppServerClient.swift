@@ -51,7 +51,7 @@ final class CodexAppServerClient: CodexUsageProviding {
             daily: daily,
             modelUsage: modelUsage,
             granularity: .aggregate,
-            estimatedCostUSD: TokenUsage.completeEstimatedCost(for: modelUsage),
+            estimatedCostUSD: TokenUsage.completeDailyEstimatedCost(for: daily),
             account: ProviderAccount(
                 email: account.email,
                 planName: account.planType ?? limits.codexLimits?.planType

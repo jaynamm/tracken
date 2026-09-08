@@ -81,7 +81,8 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
         return accumulators.mapValues { models in
             models.map { modelName, usage in
                 if !usage.hasCompleteBreakdown {
-                    return ModelUsage(modelName: modelName, totalTokens: usage.totalTokens)
+                    return ModelUsage(modelName: modelName, totalTokens: usage.totalTokens,
+                                      knownEstimatedCostUSD: usage.hasPricedUsage ? usage.estimatedCostUSD : nil)
                 }
                 return ModelUsage(
                     modelName: modelName,
@@ -89,7 +90,8 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
                     outputTokens: usage.outputTokens,
                     cachedInputTokens: usage.cachedInputTokens,
                     cacheWriteInputTokens: usage.cacheWriteInputTokens,
-                    estimatedCostUSD: usage.hasKnownPrice ? usage.estimatedCostUSD : nil
+                    estimatedCostUSD: usage.hasKnownPrice ? usage.estimatedCostUSD : nil,
+                    knownEstimatedCostUSD: usage.hasPricedUsage ? usage.estimatedCostUSD : nil
                 )
             }
             .sorted {
@@ -285,6 +287,7 @@ nonisolated private struct UsageAccumulator {
     var hasKnownPrice = true
     var totalTokens = 0
     var hasCompleteBreakdown = true
+    var hasPricedUsage = false
 
     mutating func add(_ usage: SessionTokenUsage, price: TokenPrice?) {
         let input = max(0, usage.inputTokens)
@@ -306,11 +309,13 @@ nonisolated private struct UsageAccumulator {
         cachedInputTokens += cached
         cacheWriteInputTokens += cacheWrite
 
-        guard let cost = price?.cost(input: uncached, cached: cached, write: cacheWrite,
+        guard usage.effectiveTotalTokens == input + output,
+              let cost = price?.cost(input: uncached, cached: cached, write: cacheWrite,
                                      output: output, contextTokens: input) else {
             hasKnownPrice = false
             return
         }
+        hasPricedUsage = true
         estimatedCostUSD += cost
     }
 }

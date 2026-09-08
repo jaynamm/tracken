@@ -143,20 +143,12 @@ private struct MenuBarProviderCard: View {
         }
     }
 
-    @ViewBuilder
     private func secondaryMetric(for usage: TokenUsage) -> some View {
-        switch provider {
-        case .codex:
-            CompactMetric(
-                title: "Today est.",
-                value: usage.last14Days.first?.estimatedCostUSD.map(Format.cost) ?? "—"
-            )
-        case .anthropic:
-            CompactMetric(
-                title: "Today est.",
-                value: usage.last14Days.first?.estimatedCostUSD.map(Format.cost) ?? "—"
-            )
-        }
+        let today = usage.last14Days.first
+        return CompactMetric(
+            title: today?.isPartialCostEstimate == true ? "Today partial est." : "Today est.",
+            value: today?.knownEstimatedCostUSD.map(Format.cost) ?? "—"
+        )
     }
 
     private var emptyHint: String {

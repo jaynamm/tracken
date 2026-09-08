@@ -118,9 +118,41 @@ private actor PricingHTTPFixture {
         try checkPrice(usage.recentDays(count: 1, now: now).first?.estimatedCostUSD == nil,
                        "Same-day unpriced usage prevents a misleading partial sum")
         try checkPrice(usage.displayUsage(dayCount: 14, now: now).estimatedCostUSD == nil, "Period total respects unpriced dates")
+        let partial = usage.displayUsage(dayCount: 14, now: now)
+        try checkPrice(partial.knownEstimatedCostUSD == 0.25 && partial.isPartialCostEstimate,
+                       "Known same-day costs survive normalization with an explicit partial status")
+        try checkPrice(partial.daily.first?.knownEstimatedCostUSD == 0.25
+                       && partial.daily.first?.isPartialCostEstimate == true,
+                       "Day and period show the same known subtotal")
+        let unpriced = TokenUsage(provider: .codex, daily: [unknown], granularity: .aggregate)
+            .displayUsage(dayCount: 14, now: now)
+        try checkPrice(unpriced.knownEstimatedCostUSD == nil && !unpriced.isPartialCostEstimate,
+                       "Zero padding must not invent a $0 partial estimate for unpriced usage")
+        let sameModel = TokenUsage.aggregateModelUsage([
+            ModelUsage(modelName: "gpt-6-astra", inputTokens: 10, outputTokens: 5, estimatedCostUSD: 0.25),
+            ModelUsage(modelName: "gpt-6-astra", totalTokens: 30)
+        ])
+        try checkPrice(sameModel.first?.knownEstimatedCostUSD == 0.25
+                       && sameModel.first?.isPartialCostEstimate == true
+                       && sameModel.first?.totalTokens == 45,
+                       "Mixed records for the same model preserve the priced subtotal and all tokens")
+        let knownModel = ModelUsage(modelName: "gpt-6-astra", inputTokens: 10, outputTokens: 5, estimatedCostUSD: 0.25)
+        let unknownModel = ModelUsage(modelName: "Unknown Codex model", totalTokens: 27_186)
+        let mixedDay = DailyUsage(date: now, totalTokens: 30_000, modelUsage: [knownModel, unknownModel])
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: now)!
+        let completeDay = DailyUsage(date: yesterday, totalTokens: 20, estimatedCostUSD: 0.5)
+        let mixedUsage = TokenUsage(provider: .codex, daily: [mixedDay, completeDay], granularity: .aggregate)
+        let period = mixedUsage.displayUsage(dayCount: 14, now: now)
+        try checkPrice(period.knownEstimatedCostUSD == 0.75 && period.isPartialCostEstimate
+                       && period.totalTokens == 30_020,
+                       "Partial and complete days sum known cost once while retaining official totals")
+        try checkPrice(mixedUsage.displayUsage(dayCount: 1, now: now).knownEstimatedCostUSD == 0.25,
+                       "Partial estimate follows the selected date window")
         let empty = TokenUsage(provider: .anthropic, daily: []).recentDays(count: 2, now: now)
         try checkPrice(empty.allSatisfy { $0.estimatedCostUSD == 0 && $0.totalTokens == 0 }, "Unused dates have zero cost")
         let priced = TokenUsage(provider: .codex, daily: [known], granularity: .aggregate).displayUsage(dayCount: 14, now: now)
         try checkPrice(priced.estimatedCostUSD == 0.25, "Padded zero days do not erase period cost")
+        try checkPrice(priced.knownEstimatedCostUSD == 0.25 && !priced.isPartialCostEstimate,
+                       "Complete estimates retain their original presentation")
     }
 }

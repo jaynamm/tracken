@@ -65,8 +65,13 @@ struct DailyUsageChart: View {
                 Text("API-equivalent cost of recorded usage. Not a subscription charge.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                if days.contains(where: { $0.estimatedCostUSD == nil }) {
-                    Text("Days without a complete estimate have no cost bar; see the list below.")
+                if days.contains(where: \.isPartialCostEstimate) {
+                    Text("Lighter bars are partial estimates for priced records only.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                if days.contains(where: { $0.knownEstimatedCostUSD == nil }) {
+                    Text("Days without any priced records have no cost bar; see the list below.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -77,10 +82,11 @@ struct DailyUsageChart: View {
     @ChartContentBuilder
     private func marks(for day: DailyUsage) -> some ChartContent {
         if showsCost {
-            if let cost = day.estimatedCostUSD {
+            if let cost = day.knownEstimatedCostUSD {
                 BarMark(x: .value("Day", day.date, unit: .day),
                         y: .value("Estimated cost (USD)", cost))
-                    .foregroundStyle(tint)
+                    .foregroundStyle(day.isPartialCostEstimate ? tint.opacity(0.45) : tint)
+                    .accessibilityLabel(day.isPartialCostEstimate ? "Partial estimated cost" : "Estimated cost")
             }
         } else if showsBreakdown {
             BarMark(
@@ -121,7 +127,9 @@ struct DailyUsageChart: View {
     private func chartSummary(for day: DailyUsage) -> String {
         let date = day.date.formatted(.dateTime.month(.abbreviated).day())
         let tokens = Format.tokens(day.totalTokens)
-        let cost = day.estimatedCostUSD.map { "≈ \(Format.cost($0))" } ?? "Estimate unavailable"
+        let cost = day.knownEstimatedCostUSD.map {
+            "≈ \(Format.cost($0))\(day.isPartialCostEstimate ? " (partial)" : "")"
+        } ?? "Estimate unavailable"
         return "\(date): \(tokens) • \(cost)"
     }
 
@@ -142,8 +150,8 @@ struct DailyUsageChart: View {
 
     private var peakDay: DailyUsage? {
         if showsCost {
-            return days.filter { $0.estimatedCostUSD != nil }.max {
-                ($0.estimatedCostUSD ?? 0) < ($1.estimatedCostUSD ?? 0)
+            return days.filter { $0.knownEstimatedCostUSD != nil }.max {
+                ($0.knownEstimatedCostUSD ?? 0) < ($1.knownEstimatedCostUSD ?? 0)
             }
         }
         return days.max { $0.totalTokens < $1.totalTokens }
@@ -223,10 +231,11 @@ private struct DailyUsageRow: View {
                 .frame(minWidth: 72, alignment: .trailing)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(day.estimatedCostUSD.map(Format.cost) ?? "—")
+                    Text(day.knownEstimatedCostUSD.map(Format.cost) ?? "—")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(day.estimatedCostUSD == nil ? Color.secondary : tint)
-                    Text(day.estimatedCostUSD == nil ? "no estimate" : "estimated cost")
+                        .foregroundStyle(day.knownEstimatedCostUSD == nil ? Color.secondary : tint)
+                    Text(day.isPartialCostEstimate ? "partial estimate"
+                         : (day.estimatedCostUSD == nil ? "no estimate" : "estimated cost"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -283,10 +292,17 @@ private struct DailyModelCostRow: View {
             Text(Format.compactTokens(model.totalTokens))
                 .font(.caption.weight(.medium))
                 .foregroundStyle(tint)
-            Text(model.estimatedCostUSD.map(Format.cost)
-                 ?? (model.inputTokens == nil ? "Details unavailable" : "Rate unavailable"))
-                .font(.caption.weight(.medium))
-                .frame(minWidth: 82, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(model.knownEstimatedCostUSD.map(Format.cost)
+                     ?? (model.inputTokens == nil ? "Details unavailable" : "Rate unavailable"))
+                    .font(.caption.weight(.medium))
+                if model.isPartialCostEstimate {
+                    Text("partial estimate")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(minWidth: 82, alignment: .trailing)
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
@@ -376,9 +392,9 @@ private struct ModelUsageRow: View {
                 .frame(minWidth: 72, alignment: .trailing)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(model.estimatedCostUSD.map(Format.cost) ?? "—")
+                    Text(model.knownEstimatedCostUSD.map(Format.cost) ?? "—")
                         .font(.callout.weight(.medium))
-                    Text(model.estimatedCostUSD == nil
+                    Text(model.isPartialCostEstimate ? "partial estimate" : model.estimatedCostUSD == nil
                          ? (model.inputTokens == nil ? "Details unavailable" : "Rate unavailable")
                          : "estimated cost")
                         .font(.caption2)

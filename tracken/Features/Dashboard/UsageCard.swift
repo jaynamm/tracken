@@ -82,6 +82,11 @@ private struct UsageDetails: View {
         VStack(alignment: .leading, spacing: 12) {
             headline
             PricingStatusView(provider: provider)
+            if usage.isPartialCostEstimate {
+                Text("Partial estimates include only priced local records. Some usage is missing model details or rates, so the full cost is unavailable.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if provider == .anthropic {
                 Text("Claude Code history on this Mac. Input includes cache reads and writes. Costs use current API rates, not subscription charges.")
                     .font(.caption)
@@ -129,10 +134,14 @@ private struct UsageDetails: View {
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
-                if let cost = usage.estimatedCostUSD {
-                    Text("≈ \(Format.cost(cost)) API estimate")
+                if let cost = usage.knownEstimatedCostUSD {
+                    Text("≈ \(Format.cost(cost)) \(usage.isPartialCostEstimate ? "partial API estimate" : "API estimate")")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(provider.accentColor)
+                } else {
+                    Text("Cost estimate unavailable")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

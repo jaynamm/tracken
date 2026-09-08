@@ -188,6 +188,14 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
         let knownSummary = await read("known-summary")
         try expect(knownSummary.first?.totalTokens == 8_676 && knownSummary.first?.estimatedCostUSD == nil,
                    "Knowing the model does not supply a missing input/output split")
+        try expect(knownSummary.first?.knownEstimatedCostUSD == nil,
+                   "Total-only records must not invent even a partial cost")
+        _ = try write("mixed-summary", "a", [context(), modern("summary", totalOnly), modern("priced", u, at: 20)])
+        let mixedSummary = await read("mixed-summary")
+        try expect(mixedSummary.first?.totalTokens == 8_786
+                   && mixedSummary.first?.isPartialCostEstimate == true
+                   && abs((mixedSummary.first?.knownEstimatedCostUSD ?? -1) - 0.0006) < 1e-10,
+                   "Estimator preserves priced responses alongside total-only records for the same model")
         _ = try write("cache", "a", [context(), modern("cached", tokens(100, 10, cached: 60, write: 10))])
         let cache = await read("cache")
         let expected: Double = 394.0 / 1_000_000.0

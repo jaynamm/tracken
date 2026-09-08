@@ -120,8 +120,8 @@ struct ContentView: View {
                 systemImage: "sun.max"
             )
             DashboardSummaryTile(
-                title: "Today’s estimated cost (USD)",
-                value: today?.estimatedCostUSD.map(Format.cost) ?? "—",
+                title: today?.isPartialCostEstimate == true ? "Today’s partial cost (USD)" : "Today’s estimated cost (USD)",
+                value: today?.knownEstimatedCostUSD.map(Format.cost) ?? "—",
                 systemImage: "dollarsign.circle"
             )
         }
@@ -141,8 +141,8 @@ private struct SecondarySummary {
             value = usage?.rateLimit.map { Format.percent($0.usedPercent) } ?? "—"
             systemImage = "gauge.with.dots.needle.50percent"
         case .anthropic:
-            title = "Estimated cost"
-            value = usage?.estimatedCostUSD.map(Format.cost) ?? "—"
+            title = usage?.isPartialCostEstimate == true ? "Partial estimated cost" : "Estimated cost"
+            value = usage?.knownEstimatedCostUSD.map(Format.cost) ?? "—"
             systemImage = "dollarsign.circle"
         }
     }
