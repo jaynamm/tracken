@@ -213,6 +213,13 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable {
         Dictionary(grouping: rows, by: \.modelName)
             .map { modelName, entries in
                 let costs = entries.compactMap(\.estimatedCostUSD)
+                if entries.contains(where: { $0.inputTokens == nil || $0.outputTokens == nil }) {
+                    return ModelUsage(
+                        modelName: modelName,
+                        totalTokens: entries.reduce(0) { $0 + $1.totalTokens },
+                        estimatedCostUSD: costs.count == entries.count ? costs.reduce(0, +) : nil
+                    )
+                }
                 return ModelUsage(
                     modelName: modelName,
                     inputTokens: entries.compactMap(\.inputTokens).reduce(0, +),

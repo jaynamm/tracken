@@ -283,7 +283,8 @@ private struct DailyModelCostRow: View {
             Text(Format.compactTokens(model.totalTokens))
                 .font(.caption.weight(.medium))
                 .foregroundStyle(tint)
-            Text(model.estimatedCostUSD.map(Format.cost) ?? "Rate unavailable")
+            Text(model.estimatedCostUSD.map(Format.cost)
+                 ?? (model.inputTokens == nil ? "Details unavailable" : "Rate unavailable"))
                 .font(.caption.weight(.medium))
                 .frame(minWidth: 82, alignment: .trailing)
         }
@@ -306,7 +307,7 @@ private struct DailyModelCostRow: View {
         if let output = model.outputTokens {
             parts.append("Output \(Format.compactTokens(output))")
         }
-        return parts.joined(separator: " · ")
+        return parts.isEmpty ? "Input/output breakdown unavailable" : parts.joined(separator: " · ")
     }
 }
 
@@ -377,7 +378,9 @@ private struct ModelUsageRow: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(model.estimatedCostUSD.map(Format.cost) ?? "—")
                         .font(.callout.weight(.medium))
-                    Text(model.estimatedCostUSD == nil ? "Rate unavailable" : "estimated cost")
+                    Text(model.estimatedCostUSD == nil
+                         ? (model.inputTokens == nil ? "Details unavailable" : "Rate unavailable")
+                         : "estimated cost")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

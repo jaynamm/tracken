@@ -80,7 +80,10 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
 
         return accumulators.mapValues { models in
             models.map { modelName, usage in
-                ModelUsage(
+                if !usage.hasCompleteBreakdown {
+                    return ModelUsage(modelName: modelName, totalTokens: usage.totalTokens)
+                }
+                return ModelUsage(
                     modelName: modelName,
                     inputTokens: usage.inputTokens,
                     outputTokens: usage.outputTokens,
@@ -180,6 +183,7 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
                 timestamp >= cutoff,
                 timestamp < tomorrow
             else { continue }
+            guard record.usage.effectiveTotalTokens > 0 else { continue }
             if let responseID = record.responseID, !responseID.isEmpty,
                !seenResponseIDs.insert(responseID).inserted { continue }
 
@@ -230,12 +234,18 @@ nonisolated private struct SessionTokenUsage: Decodable, Equatable {
     let cachedInputTokens: Int
     let cacheWriteInputTokens: Int
     let outputTokens: Int
+    let totalTokens: Int
+
+    var effectiveTotalTokens: Int {
+        max(totalTokens, max(0, inputTokens) + max(0, outputTokens))
+    }
 
     enum CodingKeys: String, CodingKey {
         case inputTokens = "input_tokens"
         case cachedInputTokens = "cached_input_tokens"
         case cacheWriteInputTokens = "cache_write_input_tokens"
         case outputTokens = "output_tokens"
+        case totalTokens = "total_tokens"
     }
 
     init(from decoder: Decoder) throws {
@@ -244,6 +254,7 @@ nonisolated private struct SessionTokenUsage: Decodable, Equatable {
         cachedInputTokens = try container.decodeIfPresent(Int.self, forKey: .cachedInputTokens) ?? 0
         cacheWriteInputTokens = try container.decodeIfPresent(Int.self, forKey: .cacheWriteInputTokens) ?? 0
         outputTokens = try container.decodeIfPresent(Int.self, forKey: .outputTokens) ?? 0
+        totalTokens = try container.decodeIfPresent(Int.self, forKey: .totalTokens) ?? 0
     }
 }
 
@@ -272,6 +283,8 @@ nonisolated private struct UsageAccumulator {
     var cacheWriteInputTokens = 0
     var estimatedCostUSD = 0.0
     var hasKnownPrice = true
+    var totalTokens = 0
+    var hasCompleteBreakdown = true
 
     mutating func add(_ usage: SessionTokenUsage, price: TokenPrice?) {
         let input = max(0, usage.inputTokens)
@@ -279,6 +292,14 @@ nonisolated private struct UsageAccumulator {
         let cacheWrite = min(input - cached, max(0, usage.cacheWriteInputTokens))
         let uncached = input - cached - cacheWrite
         let output = max(0, usage.outputTokens)
+
+        totalTokens += usage.effectiveTotalTokens
+        // Imported summaries can contain only total_tokens, with zero-valued
+        // input/output fields. Preserve their usage without inventing a price.
+        if usage.effectiveTotalTokens > input + output {
+            hasCompleteBreakdown = false
+            hasKnownPrice = false
+        }
 
         inputTokens += input
         outputTokens += output

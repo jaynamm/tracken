@@ -156,6 +156,38 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
         _ = try write("unknown", "a", [context("unknown-model"), modern("unknown", u)])
         let unknown = await read("unknown")
         try expect(unknown.first?.totalTokens == 110 && unknown.first?.estimatedCostUSD == nil, "No invented model price")
+        var totalOnly = tokens(0, 0)
+        totalOnly["total_tokens"] = 8_676
+        var laterTotalOnly = totalOnly
+        laterTotalOnly["total_tokens"] = 9_000
+        _ = try write("summary", "a", [
+            legacy(totalOnly, total: totalOnly),
+            legacy(totalOnly, total: totalOnly, at: 11),
+            legacy(laterTotalOnly, total: laterTotalOnly, at: 12)
+        ])
+        let summary = await read("summary")
+        try expect(summary.first?.totalTokens == 17_676 && summary.first?.inputTokens == nil
+                   && summary.first?.outputTokens == nil && summary.first?.estimatedCostUSD == nil,
+                   "Total-only history must retain tokens, deduplicate unchanged totals, and leave price unknown")
+        let combined = TokenUsage.aggregateModelUsage(summary + [
+            ModelUsage(modelName: "Unknown Codex model", inputTokens: 100, outputTokens: 10, estimatedCostUSD: 0.1)
+        ])
+        try expect(combined.first?.totalTokens == 17_786 && combined.first?.inputTokens == nil
+                   && TokenUsage.completeEstimatedCost(for: combined) == nil,
+                   "Model aggregation must preserve totals and missing breakdowns")
+        let merged = CodexAppServerClient.merge(
+            officialDaily: [DailyUsage(date: today, totalTokens: 20_000)], localEstimates: [today: summary])
+        let displayed = TokenUsage(provider: .codex, daily: merged, granularity: .aggregate)
+            .displayUsage(dayCount: 14, now: now)
+        try expect(displayed.totalTokens == 20_000 && displayed.modelUsage.first?.totalTokens == 17_676
+                   && displayed.estimatedCostUSD == nil,
+                   "Display keeps the official total and does not show a partial cost as a complete estimate")
+        _ = try write("empty", "a", [legacy(tokens(0, 0), total: tokens(0, 0))])
+        try expect(await read("empty").isEmpty, "Genuinely empty records must not create unpriced model usage")
+        _ = try write("known-summary", "a", [context(), modern("summary", totalOnly)])
+        let knownSummary = await read("known-summary")
+        try expect(knownSummary.first?.totalTokens == 8_676 && knownSummary.first?.estimatedCostUSD == nil,
+                   "Knowing the model does not supply a missing input/output split")
         _ = try write("cache", "a", [context(), modern("cached", tokens(100, 10, cached: 60, write: 10))])
         let cache = await read("cache")
         let expected: Double = 394.0 / 1_000_000.0
