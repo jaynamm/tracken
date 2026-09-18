@@ -5,15 +5,20 @@
 
 import SwiftUI
 
+private enum DashboardPage: Hashable {
+    case total
+    case provider(AIProvider)
+}
+
 struct ContentView: View {
     @Environment(UsageStore.self) private var store
 
     @State private var showingSettings = false
-    @State private var selectedProvider: AIProvider = .codex
+    @State private var selectedPage: DashboardPage = .total
     @State private var claudeHistoryDays = 14
 
-    private var dayCount: Int? {
-        selectedProvider == .anthropic ? (claudeHistoryDays == 0 ? nil : claudeHistoryDays) : 14
+    private func dayCount(for provider: AIProvider) -> Int? {
+        provider == .anthropic ? (claudeHistoryDays == 0 ? nil : claudeHistoryDays) : 14
     }
 
     var body: some View {
@@ -24,17 +29,24 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     providerPicker
-                    if selectedProvider == .anthropic {
-                        Picker("History period", selection: $claudeHistoryDays) {
-                            Text("Last 14 days").tag(14)
-                            Text("Last 30 days").tag(30)
-                            Text("All local history").tag(0)
+                    switch selectedPage {
+                    case .total:
+                        TotalUsageView {
+                            selectedPage = .provider($0)
                         }
-                        .pickerStyle(.segmented)
+                    case .provider(let provider):
+                        if provider == .anthropic {
+                            Picker("History period", selection: $claudeHistoryDays) {
+                                Text("Last 14 days").tag(14)
+                                Text("Last 30 days").tag(30)
+                                Text("All local history").tag(0)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        summary(for: provider)
+                        todaySummary(for: provider)
+                        UsageCard(provider: provider, dayCount: dayCount(for: provider))
                     }
-                    summary
-                    todaySummary
-                    UsageCard(provider: selectedProvider, dayCount: dayCount)
                 }
                 .padding(20)
             }
@@ -82,20 +94,23 @@ struct ContentView: View {
     }
 
     private var providerPicker: some View {
-        Picker("Provider", selection: $selectedProvider) {
+        Picker("Dashboard", selection: $selectedPage) {
+            Label("Total", systemImage: "sum")
+                .tag(DashboardPage.total)
             ForEach(AIProvider.allCases) { provider in
                 Label(provider.shortName, systemImage: provider.symbolName)
-                    .tag(provider)
+                    .tag(DashboardPage.provider(provider))
             }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .accessibilityLabel("AI provider")
+        .accessibilityLabel("Usage dashboard")
     }
 
-    private var summary: some View {
-        let usage = store.usage(for: selectedProvider)?.displayUsage(dayCount: dayCount)
-        let secondary = SecondarySummary(provider: selectedProvider, usage: usage)
+    private func summary(for provider: AIProvider) -> some View {
+        let dayCount = dayCount(for: provider)
+        let usage = store.usage(for: provider)?.displayUsage(dayCount: dayCount)
+        let secondary = SecondarySummary(provider: provider, usage: usage)
 
         return HStack(spacing: 12) {
             DashboardSummaryTile(
@@ -111,8 +126,8 @@ struct ContentView: View {
         }
     }
 
-    private var todaySummary: some View {
-        let today = store.usage(for: selectedProvider)?.recentDays(count: 1).first
+    private func todaySummary(for provider: AIProvider) -> some View {
+        let today = store.usage(for: provider)?.recentDays(count: 1).first
         return HStack(spacing: 12) {
             DashboardSummaryTile(
                 title: "Today’s tokens",
@@ -148,7 +163,7 @@ private struct SecondarySummary {
     }
 }
 
-private struct DashboardSummaryTile: View {
+struct DashboardSummaryTile: View {
     let title: String
     let value: String
     let systemImage: String

@@ -75,11 +75,11 @@ final class UsageStore {
         AIProvider.allCases.filter(isConnected)
     }
 
-    var combinedLast14DaysTokens: Int {
-        providerStates.values.reduce(0) {
-            $0 + ($1.usage?.last14DaysTotalTokens ?? 0)
-        }
+    var totalUsage: TotalUsage {
+        TotalUsage(usages: AIProvider.allCases.compactMap { usage(for: $0) })
     }
+
+    var combinedLast14DaysTokens: Int { totalUsage.totalTokens }
 
     // MARK: - App lifetime monitoring
 

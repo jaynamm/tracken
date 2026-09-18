@@ -21,10 +21,12 @@ nonisolated private final class MemoryKeys: APIKeyStoring {
     var usage: TokenUsage
     var fetchCount = 0
     var delay = false
+    var failure: Error?
     init(_ usage: TokenUsage) { self.usage = usage }
     func fetchUsage() async throws -> TokenUsage {
         fetchCount += 1
         if delay { try await Task.sleep(for: .milliseconds(50)) }
+        if let failure { throw failure }
         return usage
     }
     func connectWithChatGPT() async throws {}
@@ -43,6 +45,7 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
         try checkMergeAndLimits()
         try await checkSessionRecords()
         try checkClaudeHistory()
+        try TotalUsageTests.run()
         try await HourlyUsageTests.run()
         try await PricingRegressionTests.run()
         print("PASS: usage store, Claude local history, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")
@@ -82,6 +85,13 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
                    "Local history must not read keys or generate demo usage")
         store.removeSavedAnthropicAPIKey()
         try expect(keys.value == nil, "Old keys can still be removed")
+        client.failure = CheckFailure(description: "Offline")
+        await store.refresh(.codex)
+        try expect(store.totalUsage.providerCount == 2 && store.totalUsage.totalTokens == 80,
+                   "Total must retain the last available usage after a refresh failure")
+        await store.logoutCodex()
+        try expect(store.totalUsage.providerCount == 1 && store.totalUsage.totalTokens == 0,
+                   "Signing out must remove Codex usage from Total")
     }
 
     @MainActor private static func checkMergeAndLimits() throws {

@@ -10,11 +10,19 @@ struct DailyUsageChart: View {
     let days: [DailyUsage]
     let tint: Color
     let showsBreakdown: Bool
+    var providerDays: [AIProvider: [DailyUsage]] = [:]
 
     @State private var selectedDayDate: Date?
     @State private var showsCost = true
 
     private var selectedDay: DailyUsage? { days.first { $0.date == selectedDayDate } }
+    private var chartProviders: [AIProvider] {
+        AIProvider.allCases.filter { providerDays[$0] != nil }
+    }
+    private var stacksProviders: Bool { !chartProviders.isEmpty }
+    private var costDays: [DailyUsage] {
+        stacksProviders ? chartProviders.flatMap { providerDays[$0] ?? [] } : days
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -26,8 +34,16 @@ struct DailyUsageChart: View {
             chartHeader
 
             Chart {
-                ForEach(days) { day in
-                    marks(for: day)
+                if stacksProviders {
+                    ForEach(chartProviders) { provider in
+                        ForEach(providerDays[provider] ?? []) { day in
+                            providerMarks(for: day, provider: provider)
+                        }
+                    }
+                } else {
+                    ForEach(days) { day in
+                        marks(for: day)
+                    }
                 }
 
                 if let selectedDay {
@@ -35,11 +51,11 @@ struct DailyUsageChart: View {
                         .foregroundStyle(.secondary.opacity(0.4))
                 }
             }
-            .chartForegroundStyleScale([
-                "Input": tint,
-                "Output": tint.opacity(0.4)
-            ])
-            .chartLegend(.hidden)
+            .chartForegroundStyleScale(
+                domain: stacksProviders ? chartProviders.map(\.shortName) : ["Input", "Output"],
+                range: stacksProviders ? chartProviders.map(\.accentColor) : [tint, tint.opacity(0.4)]
+            )
+            .chartLegend(stacksProviders ? .visible : .hidden)
             .chartXScale(domain: chartDateRange)
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day, count: max(1, days.count / 5))) {
@@ -59,23 +75,53 @@ struct DailyUsageChart: View {
                 }
             }
             .chartXSelection(value: selectedDate)
-            .frame(height: 120)
+            .frame(height: stacksProviders ? 150 : 120)
 
             if showsCost {
                 Text("API-equivalent cost of recorded usage. Not a subscription charge.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                if days.contains(where: \.isPartialCostEstimate) {
-                    Text("Lighter bars are partial estimates for priced records only.")
+                if costDays.contains(where: \.isPartialCostEstimate) {
+                    Text(stacksProviders
+                         ? "Lighter segments are partial estimates for priced records only."
+                         : "Lighter bars are partial estimates for priced records only.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                if days.contains(where: { $0.knownEstimatedCostUSD == nil }) {
-                    Text("Days without any priced records have no cost bar; see the list below.")
+                if costDays.contains(where: { $0.knownEstimatedCostUSD == nil }) {
+                    Text(stacksProviders
+                         ? "Platforms without priced records have no cost segment for that day; daily totals may be partial."
+                         : "Days without any priced records have no cost bar; see the list below.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
+
+    @ChartContentBuilder
+    private func providerMarks(for day: DailyUsage, provider: AIProvider) -> some ChartContent {
+        if showsCost {
+            if let cost = day.knownEstimatedCostUSD {
+                BarMark(
+                    x: .value("Day", day.date, unit: .day),
+                    y: .value("Estimated cost (USD)", cost),
+                    stacking: .standard
+                )
+                .foregroundStyle(by: .value("Platform", provider.shortName))
+                .opacity(day.isPartialCostEstimate ? 0.45 : 1)
+                .accessibilityLabel("\(provider.shortName), \(day.date.formatted(date: .abbreviated, time: .omitted))")
+                .accessibilityValue("\(Format.cost(cost)), \(day.isPartialCostEstimate ? "partial estimate" : "estimated cost")")
+            }
+        } else {
+            BarMark(
+                x: .value("Day", day.date, unit: .day),
+                y: .value("Tokens", day.totalTokens),
+                stacking: .standard
+            )
+            .foregroundStyle(by: .value("Platform", provider.shortName))
+            .accessibilityLabel("\(provider.shortName), \(day.date.formatted(date: .abbreviated, time: .omitted))")
+            .accessibilityValue("\(Format.tokens(day.totalTokens)) tokens")
         }
     }
 
@@ -120,8 +166,28 @@ struct DailyUsageChart: View {
                 Text(chartSummary(for: day))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(tint)
+                if stacksProviders {
+                    HStack(spacing: 12) {
+                        ForEach(chartProviders) { provider in
+                            if let usage = providerDays[provider]?.first(where: { $0.date == day.date }) {
+                                Text("\(provider.shortName): \(providerSummary(for: usage))")
+                                    .foregroundStyle(provider.accentColor)
+                            }
+                        }
+                    }
+                    .font(.caption2)
+                }
             }
         }
+    }
+
+    private func providerSummary(for day: DailyUsage) -> String {
+        if showsCost {
+            return day.knownEstimatedCostUSD.map {
+                "\(Format.cost($0))\(day.isPartialCostEstimate ? " (partial)" : "")"
+            } ?? "—"
+        }
+        return "\(Format.compactTokens(day.totalTokens)) tokens"
     }
 
     private func chartSummary(for day: DailyUsage) -> String {

@@ -314,6 +314,43 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
     var last14DaysTotalTokens: Int { last14Days.reduce(0) { $0 + $1.totalTokens } }
 }
 
+/// A shared calendar window across providers, without combining their account limits.
+nonisolated struct TotalUsage: Sendable, CostEstimating {
+    let daily: [DailyUsage]
+    let dailyByProvider: [AIProvider: [DailyUsage]]
+    let providerCount: Int
+    let estimatedCostUSD: Double?
+    let knownEstimatedCostUSD: Double?
+
+    var totalTokens: Int { daily.reduce(0) { $0 + $1.totalTokens } }
+    var hasUsageData: Bool { providerCount > 0 }
+
+    init(usages: [TokenUsage], dayCount: Int = 14, now: Date = Date(), calendar: Calendar = .current) {
+        providerCount = usages.count
+        dailyByProvider = Dictionary(uniqueKeysWithValues: usages.map {
+            ($0.provider, $0.recentDays(count: dayCount, now: now, calendar: calendar))
+        })
+        let sourceDays = dailyByProvider.values.flatMap { $0 }
+        let grouped = Dictionary(grouping: sourceDays, by: \.date)
+        daily = grouped.map { date, entries in
+            // Zero-filled dates must not make unpriced activity look like a $0 estimate.
+            let active = entries.filter {
+                $0.totalTokens > 0 || !$0.modelUsage.isEmpty || ($0.knownEstimatedCostUSD ?? 0) > 0
+            }
+            return DailyUsage(
+                date: date,
+                totalTokens: entries.reduce(0) { $0 + $1.totalTokens },
+                estimatedCostUSD: TokenUsage.completeDailyEstimatedCost(for: entries),
+                knownEstimatedCostUSD: sumKnownCosts(active.map(\.knownEstimatedCostUSD))
+            )
+        }.sorted { $0.date > $1.date }
+        estimatedCostUSD = usages.isEmpty ? nil : TokenUsage.completeDailyEstimatedCost(for: sourceDays)
+        knownEstimatedCostUSD = estimatedCostUSD ?? sumKnownCosts(sourceDays.filter {
+            $0.totalTokens > 0 || !$0.modelUsage.isEmpty || ($0.knownEstimatedCostUSD ?? 0) > 0
+        }.map(\.knownEstimatedCostUSD))
+    }
+}
+
 nonisolated enum ConnectionStatus: Equatable, Sendable {
     case notConnected
     case connecting
