@@ -47,19 +47,19 @@ struct DailyUsageChart: View {
                 }
 
                 if let selectedDay {
-                    RuleMark(x: .value("Day", selectedDay.date, unit: .day))
+                    RuleMark(x: .value(L10n.text("Day"), selectedDay.date, unit: .day))
                         .foregroundStyle(.secondary.opacity(0.4))
                 }
             }
             .chartForegroundStyleScale(
-                domain: stacksProviders ? chartProviders.map(\.shortName) : ["Input", "Output"],
+                domain: stacksProviders ? chartProviders.map(\.shortName) : [L10n.text("Input"), L10n.text("Output")],
                 range: stacksProviders ? chartProviders.map(\.accentColor) : [tint, tint.opacity(0.4)]
             )
             .chartLegend(stacksProviders ? .visible : .hidden)
             .chartXScale(domain: chartDateRange)
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day, count: max(1, days.count / 5))) {
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day().locale(L10n.locale))
                 }
             }
             .chartYAxis {
@@ -82,16 +82,16 @@ struct DailyUsageChart: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 if costDays.contains(where: \.isPartialCostEstimate) {
-                    Text(stacksProviders
+                    Text(L10n.text(stacksProviders
                          ? "Lighter segments are partial estimates for priced records only."
-                         : "Lighter bars are partial estimates for priced records only.")
+                         : "Lighter bars are partial estimates for priced records only."))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 if costDays.contains(where: { $0.knownEstimatedCostUSD == nil }) {
-                    Text(stacksProviders
+                    Text(L10n.text(stacksProviders
                          ? "Platforms without priced records have no cost segment for that day; daily totals may be partial."
-                         : "Days without any priced records have no cost bar; see the list below.")
+                         : "Days without any priced records have no cost bar; see the list below."))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -104,23 +104,23 @@ struct DailyUsageChart: View {
         if showsCost {
             if let cost = day.knownEstimatedCostUSD {
                 BarMark(
-                    x: .value("Day", day.date, unit: .day),
-                    y: .value("Estimated cost (USD)", cost),
+                    x: .value(L10n.text("Day"), day.date, unit: .day),
+                    y: .value(L10n.text("Estimated cost (USD)"), cost),
                     stacking: .standard
                 )
-                .foregroundStyle(by: .value("Platform", provider.shortName))
+                .foregroundStyle(by: .value(L10n.text("Platform"), provider.shortName))
                 .opacity(day.isPartialCostEstimate ? 0.45 : 1)
-                .accessibilityLabel("\(provider.shortName), \(day.date.formatted(date: .abbreviated, time: .omitted))")
-                .accessibilityValue("\(Format.cost(cost)), \(day.isPartialCostEstimate ? "partial estimate" : "estimated cost")")
+                .accessibilityLabel("\(provider.shortName), \(Format.date(day.date))")
+                .accessibilityValue("\(Format.cost(cost)), \(L10n.text(day.isPartialCostEstimate ? "partial estimate" : "estimated cost"))")
             }
         } else {
             BarMark(
-                x: .value("Day", day.date, unit: .day),
-                y: .value("Tokens", day.totalTokens),
+                x: .value(L10n.text("Day"), day.date, unit: .day),
+                y: .value(L10n.text("Tokens"), day.totalTokens),
                 stacking: .standard
             )
-            .foregroundStyle(by: .value("Platform", provider.shortName))
-            .accessibilityLabel("\(provider.shortName), \(day.date.formatted(date: .abbreviated, time: .omitted))")
+            .foregroundStyle(by: .value(L10n.text("Platform"), provider.shortName))
+            .accessibilityLabel("\(provider.shortName), \(Format.date(day.date))")
             .accessibilityValue("\(Format.tokens(day.totalTokens)) tokens")
         }
     }
@@ -129,29 +129,29 @@ struct DailyUsageChart: View {
     private func marks(for day: DailyUsage) -> some ChartContent {
         if showsCost {
             if let cost = day.knownEstimatedCostUSD {
-                BarMark(x: .value("Day", day.date, unit: .day),
-                        y: .value("Estimated cost (USD)", cost))
+                BarMark(x: .value(L10n.text("Day"), day.date, unit: .day),
+                        y: .value(L10n.text("Estimated cost (USD)"), cost))
                     .foregroundStyle(day.isPartialCostEstimate ? tint.opacity(0.45) : tint)
-                    .accessibilityLabel(day.isPartialCostEstimate ? "Partial estimated cost" : "Estimated cost")
+                    .accessibilityLabel(L10n.text(day.isPartialCostEstimate ? "Partial estimated cost" : "Estimated cost"))
             }
         } else if showsBreakdown {
             BarMark(
-                x: .value("Day", day.date, unit: .day),
-                y: .value("Output", day.outputTokens ?? 0),
+                x: .value(L10n.text("Day"), day.date, unit: .day),
+                y: .value(L10n.text("Output"), day.outputTokens ?? 0),
                 stacking: .standard
             )
-            .foregroundStyle(by: .value("Type", "Output"))
+            .foregroundStyle(by: .value(L10n.text("Type"), L10n.text("Output")))
 
             BarMark(
-                x: .value("Day", day.date, unit: .day),
-                y: .value("Input", day.inputTokens ?? 0),
+                x: .value(L10n.text("Day"), day.date, unit: .day),
+                y: .value(L10n.text("Input"), day.inputTokens ?? 0),
                 stacking: .standard
             )
-            .foregroundStyle(by: .value("Type", "Input"))
+            .foregroundStyle(by: .value(L10n.text("Type"), L10n.text("Input")))
         } else {
             BarMark(
-                x: .value("Day", day.date, unit: .day),
-                y: .value("Tokens", day.totalTokens)
+                x: .value(L10n.text("Day"), day.date, unit: .day),
+                y: .value(L10n.text("Tokens"), day.totalTokens)
             )
             .foregroundStyle(tint)
         }
@@ -184,18 +184,18 @@ struct DailyUsageChart: View {
     private func providerSummary(for day: DailyUsage) -> String {
         if showsCost {
             return day.knownEstimatedCostUSD.map {
-                "\(Format.cost($0))\(day.isPartialCostEstimate ? " (partial)" : "")"
+                "\(Format.cost($0))\(day.isPartialCostEstimate ? L10n.text(" (partial)") : "")"
             } ?? "—"
         }
-        return "\(Format.compactTokens(day.totalTokens)) tokens"
+        return L10n.format("%@ tokens", Format.compactTokens(day.totalTokens))
     }
 
     private func chartSummary(for day: DailyUsage) -> String {
-        let date = day.date.formatted(.dateTime.month(.abbreviated).day())
+        let date = Format.day(day.date)
         let tokens = Format.tokens(day.totalTokens)
         let cost = day.knownEstimatedCostUSD.map {
-            "≈ \(Format.cost($0))\(day.isPartialCostEstimate ? " (partial)" : "")"
-        } ?? "Estimate unavailable"
+            "≈ \(Format.cost($0))\(day.isPartialCostEstimate ? L10n.text(" (partial)") : "")"
+        } ?? L10n.text("Estimate unavailable")
         return "\(date): \(tokens) • \(cost)"
     }
 
@@ -276,9 +276,9 @@ private struct DailyUsageRow: View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(day.date.formatted(.dateTime.month(.abbreviated).day()))
+                    Text(Format.day(day.date))
                         .font(.callout.weight(.medium))
-                    Text(day.date.formatted(.dateTime.weekday(.abbreviated)))
+                    Text(Format.weekday(day.date))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -297,11 +297,11 @@ private struct DailyUsageRow: View {
                 .frame(minWidth: 72, alignment: .trailing)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(day.knownEstimatedCostUSD.map(Format.cost) ?? "—")
+                    Text(day.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(day.knownEstimatedCostUSD == nil ? Color.secondary : tint)
-                    Text(day.isPartialCostEstimate ? "partial estimate"
-                         : (day.estimatedCostUSD == nil ? "no estimate" : "estimated cost"))
+                    Text(L10n.text(day.isPartialCostEstimate ? "partial estimate"
+                         : (day.estimatedCostUSD == nil ? "no estimate" : "estimated cost")))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -330,7 +330,7 @@ private struct DailyUsageRow: View {
 
     private func compactMetric(_ title: String, value: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
+            Text(L10n.text(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(Format.compactTokens(value))
@@ -359,8 +359,8 @@ private struct DailyModelCostRow: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(tint)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(model.knownEstimatedCostUSD.map(Format.cost)
-                     ?? (model.inputTokens == nil ? "Details unavailable" : "Rate unavailable"))
+                Text(model.knownEstimatedCostUSD.map { Format.cost($0) }
+                     ?? L10n.text(model.inputTokens == nil ? "Details unavailable" : "Rate unavailable"))
                     .font(.caption.weight(.medium))
                 if model.isPartialCostEstimate {
                     Text("partial estimate")
@@ -378,18 +378,18 @@ private struct DailyModelCostRow: View {
     private var tokenBreakdown: String {
         var parts: [String] = []
         if let input = model.inputTokens {
-            parts.append("Input \(Format.compactTokens(input))")
+            parts.append(L10n.format("Input %@", Format.compactTokens(input)))
         }
         if model.cachedInputTokens > 0 {
-            parts.append("Cached \(Format.compactTokens(model.cachedInputTokens))")
+            parts.append(L10n.format("Cached %@", Format.compactTokens(model.cachedInputTokens)))
         }
         if model.cacheWriteInputTokens > 0 {
-            parts.append("Cache write \(Format.compactTokens(model.cacheWriteInputTokens))")
+            parts.append(L10n.format("Cache write %@", Format.compactTokens(model.cacheWriteInputTokens)))
         }
         if let output = model.outputTokens {
-            parts.append("Output \(Format.compactTokens(output))")
+            parts.append(L10n.format("Output %@", Format.compactTokens(output)))
         }
-        return parts.isEmpty ? "Input/output breakdown unavailable" : parts.joined(separator: " · ")
+        return parts.isEmpty ? L10n.text("Input/output breakdown unavailable") : parts.joined(separator: " · ")
     }
 }
 
@@ -405,9 +405,9 @@ struct ModelUsageList: View {
 
             if usage.modelUsage.isEmpty {
                 Label(
-                    usage.provider == .codex
+                    L10n.text(usage.provider == .codex
                         ? "No model token metadata was found in recent local Codex sessions."
-                        : "No model usage is available.",
+                        : "No model usage is available."),
                     systemImage: "info.circle"
                 )
                 .font(.caption)
@@ -458,11 +458,11 @@ private struct ModelUsageRow: View {
                 .frame(minWidth: 72, alignment: .trailing)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(model.knownEstimatedCostUSD.map(Format.cost) ?? "—")
+                    Text(model.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—")
                         .font(.callout.weight(.medium))
-                    Text(model.isPartialCostEstimate ? "partial estimate" : model.estimatedCostUSD == nil
+                    Text(L10n.text(model.isPartialCostEstimate ? "partial estimate" : model.estimatedCostUSD == nil
                          ? (model.inputTokens == nil ? "Details unavailable" : "Rate unavailable")
-                         : "estimated cost")
+                         : "estimated cost"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -480,17 +480,17 @@ private struct ModelUsageRow: View {
     private var cacheSummary: String {
         var parts: [String] = []
         if model.cachedInputTokens > 0 {
-            parts.append("Cached input \(Format.tokens(model.cachedInputTokens))")
+            parts.append(L10n.format("Cached input %@", Format.tokens(model.cachedInputTokens)))
         }
         if model.cacheWriteInputTokens > 0 {
-            parts.append("Cache write \(Format.tokens(model.cacheWriteInputTokens))")
+            parts.append(L10n.format("Cache write %@", Format.tokens(model.cacheWriteInputTokens)))
         }
         return parts.joined(separator: " · ")
     }
 
     private func compactMetric(_ title: String, value: Int) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
+            Text(L10n.text(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(Format.compactTokens(value))

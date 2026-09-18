@@ -15,6 +15,15 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 
 ![tracken Total 대시보드와 Codex·Claude 누적 차트](docs/images/dashboard.png)
 
+<details>
+<summary>한국어 화면과 언어 설정</summary>
+
+![tracken 한국어 대시보드](docs/images/dashboard-ko.png)
+
+<img src="docs/images/language-settings.png" alt="한국어·English 언어 설정" width="480">
+
+</details>
+
 ### 메뉴 막대
 
 <img src="docs/images/menu-bar.png" alt="tracken 메뉴 막대 화면" width="360">
@@ -28,6 +37,7 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 - Codex 로컬 세션을 기반으로 일자별·모델별 토큰과 API 환산 예상 비용 표시
 - Codex 사용 한도·초기화 시각 및 Claude Code의 과거 일별·모델별 사용량 표시
 - 메뉴 막대에서 공급자별 사용량 빠르게 확인
+- 설정에서 한국어·English 전환 및 선택한 언어 저장
 - 전체 또는 공급자별 사용량 새로고침
 - Codex CLI의 기존 ChatGPT 로그인 재사용
 - 이전 버전에서 macOS 키체인에 저장한 Anthropic API 키 제거
@@ -60,7 +70,7 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 
 3. `tracken` 스킴과 실행할 Mac을 선택한 뒤 `⌘R`로 앱을 실행합니다.
 
-앱은 메인 창과 메뉴 막대 항목을 함께 제공합니다. 대시보드 상단의 tracken 왼쪽에는 설치된 앱의 컬러 아이콘을 표시합니다. 메뉴 막대에는 앱 아이콘의 마스코트를 단색으로 표시하며, macOS의 밝은·어두운 메뉴 막대에 맞춰 색상이 바뀝니다. Dock에는 별도의 앱 아이콘을 유지하지 않습니다.
+앱은 메인 창과 메뉴 막대 항목을 함께 제공합니다. 대시보드 상단의 tracken 왼쪽에는 배경 없는 컬러 마스코트를 표시합니다. 메뉴 막대에는 같은 마스코트를 단색으로 표시하며, macOS의 밝은·어두운 메뉴 막대에 맞춰 색상이 바뀝니다. Dock에는 별도의 앱 아이콘을 유지하지 않습니다.
 
 ## 사용 방법
 
@@ -69,6 +79,8 @@ Codex와 Anthropic의 토큰 사용량을 한곳에서 확인하는 macOS 메뉴
 3. 기본 **Total** 페이지에서 플랫폼별 현황과 통합 사용량을 확인합니다. 상단 공급자 탭이나 플랫폼 카드의 **Details**로 개별 화면을 열 수 있습니다. Claude는 최근 14일·30일·전체 로컬 기록 중 조회 기간을 선택할 수 있습니다.
 4. 새로고침 버튼으로 연결된 공급자의 데이터를 다시 불러옵니다.
 5. Codex 연결 해제는 **Sign out**, Claude 기록 재조회는 **Reload history**를 누릅니다. 이전 Anthropic API 키는 **Remove old API key**로 삭제할 수 있습니다.
+
+설정 맨 위의 **언어 / Language**에서 **한국어 (Korean)** 또는 **English**를 선택할 수 있습니다. 대시보드·메뉴 막대·설정의 문구와 날짜·숫자 표시가 즉시 바뀌며, 선택은 앱을 다시 실행해도 유지됩니다. 최초 실행 시 macOS의 우선 언어가 한국어이면 한국어로, 그 외에는 영어로 시작합니다. 서비스·모델 이름과 외부 시스템에서 전달된 알 수 없는 오류의 원문은 그대로 표시합니다.
 
 Claude의 과거 기록은 그대로 보존됩니다. API 키 삭제는 로컬 사용 기록을 지우거나 조회를 끄지 않습니다. 메뉴 막대의 공급자별 사용량과 합계는 대시보드에서 선택한 기간과 관계없이 최근 14일 기준입니다.
 

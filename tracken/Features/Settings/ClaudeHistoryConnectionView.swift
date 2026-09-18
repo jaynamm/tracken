@@ -11,7 +11,7 @@ struct ClaudeHistoryConnectionView: View {
             Text("Reads saved usage from this Mac automatically. No API key is needed. Claude web and other devices are not included.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Label(store.isAutoRefreshEnabled ? "Refreshes every hour, even with the window closed" : "Automatic refresh paused",
+            Label(L10n.text(store.isAutoRefreshEnabled ? "Refreshes every hour, even with the window closed" : "Automatic refresh paused"),
                   systemImage: "clock")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -21,7 +21,7 @@ struct ClaudeHistoryConnectionView: View {
                 .foregroundStyle(.secondary)
             SettingsStatusRow(status: store.status(for: .anthropic), isWorking: isWorking)
             if case .unavailable(let message) = store.status(for: .anthropic) {
-                Text(message).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.message(message)).font(.caption).foregroundStyle(.secondary)
             }
             HStack {
                 Button("Reload history") {
@@ -33,7 +33,7 @@ struct ClaudeHistoryConnectionView: View {
                 }
                 .disabled(isWorking)
                 Spacer()
-                Button(removedKey ? "Saved key removed" : "Remove old API key", role: .destructive) {
+                Button(L10n.text(removedKey ? "Saved key removed" : "Remove old API key"), role: .destructive) {
                     store.removeSavedAnthropicAPIKey()
                     removedKey = true
                 }

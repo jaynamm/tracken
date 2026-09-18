@@ -7,11 +7,11 @@ struct PricingStatusView: View {
     var body: some View {
         let snapshot = store.pricingSnapshots[provider] ?? .bundled(for: provider)
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(snapshot.isBundled ? "Bundled rates verified" : "Official rates checked") \(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
+            Text(L10n.format(snapshot.isBundled ? "Bundled rates verified %@" : "Official rates checked %@", Format.date(snapshot.checkedAt, time: true)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             if let error = store.pricingErrors[provider] {
-                Label(error, systemImage: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
+                Label(L10n.message(error), systemImage: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
                     .font(.caption2)
                     .foregroundStyle(.orange)
             } else if Date().timeIntervalSince(snapshot.checkedAt) > 86_400 {
@@ -76,6 +76,6 @@ struct PricingSettingsView: View {
     }
 
     private func rate(_ value: Double?) -> String {
-        value.map { $0.formatted(.currency(code: "USD").precision(.fractionLength(2...5))) } ?? "—"
+        value.map { $0.formatted(.currency(code: "USD").precision(.fractionLength(2...5)).locale(L10n.locale)) } ?? "—"
     }
 }

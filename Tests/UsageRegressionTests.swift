@@ -46,6 +46,7 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
         try await checkSessionRecords()
         try checkClaudeHistory()
         try TotalUsageTests.run()
+        try LocalizationTests.run()
         try await HourlyUsageTests.run()
         try await PricingRegressionTests.run()
         print("PASS: usage store, Claude local history, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")

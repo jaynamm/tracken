@@ -3,7 +3,6 @@
 //  tracken
 //
 
-import AppKit
 import SwiftUI
 
 private enum DashboardPage: Hashable {
@@ -53,6 +52,7 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 460, minHeight: 520)
+        .environment(\.locale, AppSettings.shared.language.locale)
         .sheet(isPresented: $showingSettings) {
             SettingsView()
                 .environment(store)
@@ -61,12 +61,15 @@ struct ContentView: View {
 
     private var header: some View {
         HStack {
-            Image(nsImage: NSApplication.shared.applicationIconImage)
+            Image("MenuBarIcon")
+                .renderingMode(.template)
                 .resizable()
-                .interpolation(.high)
                 .scaledToFit()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .frame(width: 28, height: 32)
+                .foregroundStyle(LinearGradient(
+                    colors: [Color(red: 1, green: 0.75, blue: 0.42), Color(red: 0.9, green: 0.45, blue: 0.26)],
+                    startPoint: .top, endPoint: .bottom
+                ))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -119,7 +122,7 @@ struct ContentView: View {
 
         return HStack(spacing: 12) {
             DashboardSummaryTile(
-                title: dayCount.map { "Last \($0) days" } ?? "All local history",
+                title: dayCount.map { L10n.format("Last %lld days", $0) } ?? "All local history",
                 value: usage.map { Format.tokens($0.totalTokens) } ?? "—",
                 systemImage: "number"
             )
@@ -141,7 +144,7 @@ struct ContentView: View {
             )
             DashboardSummaryTile(
                 title: today?.isPartialCostEstimate == true ? "Today’s partial cost (USD)" : "Today’s estimated cost (USD)",
-                value: today?.knownEstimatedCostUSD.map(Format.cost) ?? "—",
+                value: today?.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—",
                 systemImage: "dollarsign.circle"
             )
         }
@@ -162,7 +165,7 @@ private struct SecondarySummary {
             systemImage = "gauge.with.dots.needle.50percent"
         case .anthropic:
             title = usage?.isPartialCostEstimate == true ? "Partial estimated cost" : "Estimated cost"
-            value = usage?.knownEstimatedCostUSD.map(Format.cost) ?? "—"
+            value = usage?.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—"
             systemImage = "dollarsign.circle"
         }
     }
@@ -175,7 +178,7 @@ struct DashboardSummaryTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: systemImage)
+            Label(L10n.text(title), systemImage: systemImage)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(value)

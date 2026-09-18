@@ -45,21 +45,21 @@ struct UsageCard: View {
             switch state.status {
             case .unavailable(let message):
                 Image(systemName: "info.circle")
-                Text(message)
+                Text(L10n.message(message))
             case .connecting:
                 ProgressView().controlSize(.small)
                 Text("Fetching usage…")
             case .failed(let message):
                 Image(systemName: "exclamationmark.triangle.fill")
-                Text(message)
+                Text(L10n.message(message))
                     .foregroundStyle(.red)
             case .notConnected, .connected:
                 Image(systemName: provider == .codex
                       ? "person.crop.circle.badge.checkmark"
                       : "folder")
-                Text(provider == .codex
+                Text(L10n.text(provider == .codex
                      ? "Connect your ChatGPT account in Settings to see Codex usage."
-                     : "Local Claude Code history is loaded automatically. Reload it in Settings.")
+                     : "Local Claude Code history is loaded automatically. Reload it in Settings."))
             }
             Spacer()
         }
@@ -135,7 +135,7 @@ private struct UsageDetails: View {
                         .foregroundStyle(.secondary)
                 }
                 if let cost = usage.knownEstimatedCostUSD {
-                    Text("≈ \(Format.cost(cost)) \(usage.isPartialCostEstimate ? "partial API estimate" : "API estimate")")
+                    Text(L10n.format(usage.isPartialCostEstimate ? "≈ %@ partial API estimate" : "≈ %@ API estimate", Format.cost(cost)))
                         .font(.caption.weight(.medium))
                         .foregroundStyle(provider.accentColor)
                 } else {
@@ -174,9 +174,7 @@ private struct UsageDetails: View {
                     if let resetsAt = rateLimit.resetsAt {
                         UsageMetric(
                             title: "Resets",
-                            value: resetsAt.formatted(
-                                .dateTime.month(.abbreviated).day().hour().minute()
-                            )
+                            value: Format.date(resetsAt, time: true)
                         )
                         Spacer()
                     }
@@ -210,7 +208,7 @@ private struct UsageMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
+            Text(L10n.text(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(value)

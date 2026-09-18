@@ -30,6 +30,7 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 360)
+        .environment(\.locale, AppSettings.shared.language.locale)
     }
 
     private var header: some View {
@@ -147,7 +148,7 @@ private struct MenuBarProviderCard: View {
         let today = usage.last14Days.first
         return CompactMetric(
             title: today?.isPartialCostEstimate == true ? "Today partial est." : "Today est.",
-            value: today?.knownEstimatedCostUSD.map(Format.cost) ?? "—"
+            value: today?.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—"
         )
     }
 
@@ -170,7 +171,7 @@ private struct MenuBarProviderCard: View {
                         .fontWeight(.medium)
                         .foregroundStyle(state.status.color)
                         .lineLimit(2)
-                    Text(emptyHint)
+                    Text(L10n.message(emptyHint))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -187,7 +188,7 @@ private struct CompactMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
+            Text(L10n.text(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(value)

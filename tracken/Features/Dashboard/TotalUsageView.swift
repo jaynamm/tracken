@@ -36,7 +36,7 @@ struct TotalUsageView: View {
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
             } else {
                 ContentUnavailableView(
-                    store.isRefreshing ? "Loading platform usage…" : "No usage available",
+                    LocalizedStringKey(store.isRefreshing ? "Loading platform usage…" : "No usage available"),
                     systemImage: store.isRefreshing ? "arrow.triangle.2.circlepath" : "chart.bar",
                     description: Text("Connect Codex or load local Claude Code history in Settings to see combined usage.")
                 )
@@ -93,7 +93,7 @@ struct TotalUsageView: View {
                 )
                 DashboardSummaryTile(
                     title: total.isPartialCostEstimate ? "Partial estimated cost (USD)" : "Estimated cost (USD)",
-                    value: total.knownEstimatedCostUSD.map(Format.cost) ?? "—",
+                    value: total.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—",
                     systemImage: "dollarsign.circle"
                 )
             }
@@ -105,7 +105,7 @@ struct TotalUsageView: View {
                 )
                 DashboardSummaryTile(
                     title: today?.isPartialCostEstimate == true ? "Today’s partial cost (USD)" : "Today’s estimated cost (USD)",
-                    value: today?.knownEstimatedCostUSD.map(Format.cost) ?? "—",
+                    value: today?.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—",
                     systemImage: "dollarsign.circle"
                 )
             }
@@ -149,7 +149,7 @@ private struct TotalProviderCard: View {
                               systemImage: "gauge.with.dots.needle.50percent")
                         Spacer(minLength: 4)
                         if let resetsAt = limit.resetsAt {
-                            Text("Resets \(resetsAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))")
+                            Text("Resets \(Format.date(resetsAt, time: true))")
                         }
                     }
                     .font(.caption2)
@@ -162,7 +162,7 @@ private struct TotalProviderCard: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {
-                Text(emptyMessage)
+                Text(L10n.message(emptyMessage))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -178,14 +178,14 @@ private struct TotalProviderCard: View {
 
     private func metric(_ title: String, tokens: Int, cost: some CostEstimating) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
+            Text(L10n.text(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text("\(Format.tokens(tokens)) tokens")
                 .font(.callout.weight(.semibold))
             Text(cost.knownEstimatedCostUSD.map {
-                "≈ \(Format.cost($0)) · \(cost.isPartialCostEstimate ? "partial estimate" : "API estimate")"
-            } ?? "Cost estimate unavailable")
+                L10n.format(cost.isPartialCostEstimate ? "≈ %@ · partial estimate" : "≈ %@ · API estimate", Format.cost($0))
+            } ?? L10n.text("Cost estimate unavailable"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

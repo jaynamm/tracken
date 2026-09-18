@@ -24,11 +24,11 @@ extension AIProvider {
 extension ConnectionStatus {
     var label: String {
         switch self {
-        case .unavailable: "No local history"
-        case .notConnected: "Not connected"
-        case .connecting: "Connecting…"
-        case .connected: "Connected"
-        case .failed(let message): "Error: \(message)"
+        case .unavailable: L10n.text("No local history")
+        case .notConnected: L10n.text("Not connected")
+        case .connecting: L10n.text("Connecting…")
+        case .connected: L10n.text("Connected")
+        case .failed(let message): L10n.format("Error: %@", L10n.message(message))
         }
     }
 

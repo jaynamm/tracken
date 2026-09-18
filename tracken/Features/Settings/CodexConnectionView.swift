@@ -81,7 +81,7 @@ struct CodexConnectionView: View {
                 .foregroundStyle(.secondary)
 
             if case .failed(let message) = state.status {
-                Label(message, systemImage: "exclamationmark.triangle.fill")
+                Label(L10n.message(message), systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
