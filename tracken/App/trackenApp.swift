@@ -46,7 +46,7 @@ struct trackenApp: App {
 
         MenuBarExtra(
             "tracken",
-            systemImage: "gauge.with.dots.needle.67percent"
+            image: "MenuBarIcon"
         ) {
             MenuBarView()
                 .environment(store)
