@@ -3,6 +3,7 @@
 //  tracken
 //
 
+import AppKit
 import SwiftUI
 
 private enum DashboardPage: Hashable {
@@ -60,9 +61,13 @@ struct ContentView: View {
 
     private var header: some View {
         HStack {
-            Image(systemName: "gauge.with.dots.needle.67percent")
-                .font(.title2)
-                .foregroundStyle(.tint)
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("tracken")
