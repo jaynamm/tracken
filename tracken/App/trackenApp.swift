@@ -18,6 +18,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Use the bundled mascot directly, even if Launch Services still has
+        // a cached icon for a previous build with the same bundle identifier.
+        if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let icon = NSImage(contentsOf: iconURL) {
+            NSApp.applicationIconImage = icon
+        }
         store.startMonitoring()
     }
 
