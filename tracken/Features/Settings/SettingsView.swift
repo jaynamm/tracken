@@ -5,10 +5,34 @@
 
 import SwiftUI
 
+private enum SettingsPage: String, CaseIterable, Identifiable {
+    case language, codex, claude
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .language: L10n.text("Language")
+        case .codex: AIProvider.codex.shortName
+        case .claude: AIProvider.anthropic.shortName
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .language: "globe"
+        case .codex: AIProvider.codex.symbolName
+        case .claude: AIProvider.anthropic.symbolName
+        }
+    }
+}
+
 struct SettingsView: View {
-    @Environment(UsageStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Bindable private var settings = AppSettings.shared
+    @State private var selectedPage: SettingsPage? = .language
+
+    private var currentPage: SettingsPage { selectedPage ?? .language }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,31 +47,67 @@ struct SettingsView: View {
 
             Divider()
 
-            Form {
-                Section("Language") {
-                    Picker("Display language", selection: $settings.language) {
-                        ForEach(AppLanguage.allCases) { language in
-                            Text(verbatim: language.displayName).tag(language)
+            HStack(spacing: 0) {
+                List(SettingsPage.allCases, selection: $selectedPage) { page in
+                    Label(page.title, systemImage: page.symbolName)
+                        .padding(.vertical, 6)
+                        .tag(page)
+                }
+                .listStyle(.sidebar)
+                .scrollDisabled(true)
+                .frame(width: 172)
+                .accessibilityLabel(Text("Settings"))
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(currentPage.title)
+                        .font(.title2.weight(.semibold))
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+
+                    Form {
+                        switch currentPage {
+                        case .language:
+                            languageSettings
+                        case .codex:
+                            providerSettings(for: .codex)
+                        case .claude:
+                            providerSettings(for: .anthropic)
                         }
                     }
-                    Text("Changes apply immediately to the dashboard, menu bar, and settings.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .formStyle(.grouped)
+                    .id(currentPage)
                 }
-                PricingSettingsView()
-                ForEach(AIProvider.allCases) { provider in
-                    Section {
-                        connectionView(for: provider)
-                    } header: {
-                        Label(provider.displayName, systemImage: provider.symbolName)
-                            .foregroundStyle(provider.accentColor)
-                    }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        }
+        .frame(width: 760, height: 620)
+        .environment(\.locale, settings.language.locale)
+    }
+
+    private var languageSettings: some View {
+        Section {
+            Picker("Display language", selection: $settings.language) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(verbatim: language.displayName).tag(language)
                 }
             }
-            .formStyle(.grouped)
+            Text("Changes apply immediately to the dashboard, menu bar, and settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .frame(width: 480, height: 560)
-        .environment(\.locale, settings.language.locale)
+    }
+
+    @ViewBuilder
+    private func providerSettings(for provider: AIProvider) -> some View {
+        Section {
+            connectionView(for: provider)
+        } header: {
+            Label(provider.displayName, systemImage: provider.symbolName)
+                .foregroundStyle(provider.accentColor)
+        }
+        PricingSettingsView(provider: provider)
     }
 
     @ViewBuilder

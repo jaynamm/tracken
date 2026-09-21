@@ -25,6 +25,7 @@ struct PricingStatusView: View {
 
 struct PricingSettingsView: View {
     @Environment(UsageStore.self) private var store
+    let provider: AIProvider
 
     var body: some View {
         Section("API price tables") {
@@ -33,44 +34,42 @@ struct PricingSettingsView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Button("Update prices now") {
-                    Task { await store.refreshPrices(force: true) }
+                    Task { await store.refreshPrices(for: provider, force: true) }
                 }
                 .disabled(store.isRefreshingPrices)
                 if store.isRefreshingPrices { ProgressView().controlSize(.small) }
             }
-            ForEach(AIProvider.allCases) { provider in
-                VStack(alignment: .leading, spacing: 8) {
-                    PricingStatusView(provider: provider)
-                    let snapshot = store.pricingSnapshots[provider] ?? .bundled(for: provider)
-                    DisclosureGroup("\(provider.shortName) · \(snapshot.rates.count) model prices") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("USD per 1 million tokens · standard API rates")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            ForEach(snapshot.rates.keys.sorted(), id: \.self) { model in
-                                if let price = snapshot.rates[model] {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(model).font(.caption.weight(.semibold))
-                                        Text("Input \(rate(price.input)) · Output \(rate(price.output))")
-                                        Text("Cache read \(rate(price.cachedInput)) · Write \(rate(price.cacheWrite))")
-                                        if let oneHour = price.cacheWrite1h {
-                                            Text("1h cache write \(rate(oneHour))")
-                                        }
-                                        if let long = price.longContext {
-                                            Text("Over 272K input: \(rate(long.input)) input · \(rate(long.output)) output")
-                                            Text("Long cache read \(rate(long.cachedInput)) · Write \(rate(long.cacheWrite))")
-                                        }
+            VStack(alignment: .leading, spacing: 8) {
+                PricingStatusView(provider: provider)
+                let snapshot = store.pricingSnapshots[provider] ?? .bundled(for: provider)
+                DisclosureGroup("\(provider.shortName) · \(snapshot.rates.count) model prices") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("USD per 1 million tokens · standard API rates")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        ForEach(snapshot.rates.keys.sorted(), id: \.self) { model in
+                            if let price = snapshot.rates[model] {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(model).font(.caption.weight(.semibold))
+                                    Text("Input \(rate(price.input)) · Output \(rate(price.output))")
+                                    Text("Cache read \(rate(price.cachedInput)) · Write \(rate(price.cacheWrite))")
+                                    if let oneHour = price.cacheWrite1h {
+                                        Text("1h cache write \(rate(oneHour))")
                                     }
-                                    .font(.caption2)
-                                    .textSelection(.enabled)
+                                    if let long = price.longContext {
+                                        Text("Over 272K input: \(rate(long.input)) input · \(rate(long.output)) output")
+                                        Text("Long cache read \(rate(long.cachedInput)) · Write \(rate(long.cacheWrite))")
+                                    }
                                 }
+                                .font(.caption2)
+                                .textSelection(.enabled)
                             }
                         }
-                        .padding(.top, 8)
                     }
-                    Link("Official \(provider == .codex ? "OpenAI" : "Anthropic") pricing", destination: PricingCatalog.source(for: provider))
-                        .font(.caption)
+                    .padding(.top, 8)
                 }
+                Link("Official \(provider == .codex ? "OpenAI" : "Anthropic") pricing", destination: PricingCatalog.source(for: provider))
+                    .font(.caption)
             }
         }
     }

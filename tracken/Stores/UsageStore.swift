@@ -155,22 +155,32 @@ final class UsageStore {
 
     // MARK: - Refresh
 
-    func refreshPrices(force: Bool = false, recalculateUsage: Bool = true) async {
+    func refreshPrices(for provider: AIProvider? = nil, force: Bool = false, recalculateUsage: Bool = true) async {
         guard let pricingCatalog, !isRefreshingPrices else { return }
         isRefreshingPrices = true
         defer { isRefreshingPrices = false }
         // Display cached provenance while the public document downloads run.
-        for provider in AIProvider.allCases {
+        let providers = provider.map { [$0] } ?? AIProvider.allCases
+        for provider in providers {
             pricingSnapshots[provider] = await pricingCatalog.snapshot(for: provider)
         }
-        async let codexChanged = pricingCatalog.refresh(.codex, force: force)
-        async let claudeChanged = pricingCatalog.refresh(.anthropic, force: force)
-        let changed = await (codexChanged, claudeChanged)
-        for provider in AIProvider.allCases {
+        let changed: Bool
+        if let provider {
+            changed = await pricingCatalog.refresh(provider, force: force)
+        } else {
+            async let codexChanged = pricingCatalog.refresh(.codex, force: force)
+            async let claudeChanged = pricingCatalog.refresh(.anthropic, force: force)
+            let results = await (codexChanged, claudeChanged)
+            changed = results.0 || results.1
+        }
+        for provider in providers {
             pricingSnapshots[provider] = await pricingCatalog.snapshot(for: provider)
             pricingErrors[provider] = await pricingCatalog.error(for: provider)
         }
-        if recalculateUsage && (changed.0 || changed.1) { await refreshAll() }
+        if recalculateUsage && changed {
+            if let provider { await refresh(provider) }
+            else { await refreshAll() }
+        }
     }
 
     func refreshAll() async {

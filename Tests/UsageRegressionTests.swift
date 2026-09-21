@@ -39,9 +39,23 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
     }
 }
 
+private actor SettingsPricingFixture {
+    var requestedURLs: [URL] = []
+
+    func fetch(_ request: URLRequest) -> (Data, HTTPURLResponse) {
+        requestedURLs.append(request.url!)
+        let document = request.url == PricingCatalog.source(for: .codex)
+            ? PricingDefaults.openAI.replacingOccurrences(of: "| gpt-5.6-sol | $4.00 |", with: "| gpt-5.6-sol | $8.00 |")
+            : PricingDefaults.claude
+        return (Data(document.utf8), HTTPURLResponse(url: request.url!, statusCode: 200,
+                                                    httpVersion: nil, headerFields: nil)!)
+    }
+}
+
 @main struct UsageRegressionTests {
     @MainActor static func main() async throws {
         try await checkStore()
+        try await checkProviderPriceRefresh()
         try checkMergeAndLimits()
         try await checkSessionRecords()
         try checkClaudeHistory()
@@ -50,6 +64,32 @@ nonisolated private struct EmptyClaudeHistory: AnthropicUsageProviding {
         try await HourlyUsageTests.run()
         try await PricingRegressionTests.run()
         print("PASS: usage store, Claude local history, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")
+    }
+
+    @MainActor private static func checkProviderPriceRefresh() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tracken-settings-prices-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let http = SettingsPricingFixture()
+        let catalog = PricingCatalog(directory: directory, fetch: { await http.fetch($0) })
+        let client = FakeCodex(TokenUsage(provider: .codex, daily: []))
+        let store = UsageStore(codexClient: client, anthropicService: EmptyClaudeHistory(),
+                               apiKeyStore: MemoryKeys(), pricingCatalog: catalog)
+
+        await store.refreshPrices(for: .codex, force: true)
+        try expect(await http.requestedURLs == [PricingCatalog.source(for: .codex)],
+                   "Codex settings must update only the Codex price table")
+        try expect(store.pricingSnapshots[.codex]?.rates["gpt-5.6-sol"]?.input == 8
+                   && store.pricingSnapshots[.anthropic] == nil,
+                   "A scoped price update must leave the other provider unchanged")
+        try expect(client.fetchCount == 1 && store.usage(for: .anthropic) == nil,
+                   "Changed Codex prices must reprice only Codex usage")
+
+        await store.refreshPrices(for: .anthropic, force: true)
+        try expect(await http.requestedURLs == AIProvider.allCases.map { PricingCatalog.source(for: $0) },
+                   "Claude settings must update only the Claude price table")
+        try expect(store.pricingSnapshots[.anthropic] != nil && client.fetchCount == 1,
+                   "Updating Claude prices must not refetch Codex usage")
+        print("PASS: provider-specific settings refresh downloads and recalculates only the selected provider")
     }
 
     @MainActor private static func checkStore() async throws {
