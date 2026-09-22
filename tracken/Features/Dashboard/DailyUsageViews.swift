@@ -11,6 +11,7 @@ struct DailyUsageChart: View {
     let tint: Color
     let showsBreakdown: Bool
     var providerDays: [AIProvider: [DailyUsage]] = [:]
+    var provider: AIProvider?
 
     @State private var selectedDayDate: Date?
     @State private var showsCost = true
@@ -75,7 +76,47 @@ struct DailyUsageChart: View {
                 }
             }
             .chartXSelection(value: selectedDate)
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                guard let plotFrame = proxy.plotFrame,
+                                      geometry[plotFrame].contains(location) else {
+                                    selectedDayDate = nil
+                                    return
+                                }
+                                let date: Date? = proxy.value(
+                                    atX: location.x - geometry[plotFrame].minX
+                                )
+                                selectedDate.wrappedValue = date
+                            case .ended:
+                                selectedDayDate = nil
+                            }
+                        }
+
+                    if let selectedDay, let plotFrame = proxy.plotFrame {
+                        let frame = geometry[plotFrame]
+                        let width = min(330, geometry.size.width)
+                        let barRange = proxy.positionRange(forX: selectedDay.date)
+                        let barCenter = barRange.map { ($0.lowerBound + $0.upperBound) / 2 }
+                            ?? proxy.position(forX: selectedDay.date) ?? 0
+                        let x = min(max(0, frame.minX + barCenter - width / 2), geometry.size.width - width)
+                        hoverDetails(for: selectedDay)
+                            .frame(width: width)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .offset(x: x, y: frame.minY)
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
             .frame(height: stacksProviders ? 150 : 120)
+            .zIndex(1)
+            .onChange(of: days.map(\.date)) {
+                selectedDayDate = nil
+            }
 
             if showsCost {
                 Text("API-equivalent cost of recorded usage. Not a subscription charge.")
@@ -93,6 +134,76 @@ struct DailyUsageChart: View {
                          ? "Platforms without priced records have no cost segment for that day; daily totals may be partial."
                          : "Days without any priced records have no cost bar; see the list below."))
                         .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func hoverDetails(for day: DailyUsage) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(Format.date(day.date))
+                .font(.caption.weight(.semibold))
+
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 7) {
+                GridRow {
+                    Text("Platform")
+                    Text("Tokens")
+                        .gridColumnAlignment(.trailing)
+                    Text("Estimated cost (USD)")
+                        .multilineTextAlignment(.trailing)
+                        .gridColumnAlignment(.trailing)
+                }
+                .foregroundStyle(.secondary)
+
+                if stacksProviders {
+                    ForEach(chartProviders) { provider in
+                        hoverRow(
+                            title: provider.shortName,
+                            color: provider.accentColor,
+                            day: DailyUsageChartSelection.day(
+                                at: day.date, in: providerDays[provider] ?? []
+                            )
+                        )
+                    }
+                    if chartProviders.count > 1 {
+                        Divider()
+                            .gridCellUnsizedAxes(.horizontal)
+                        hoverRow(title: L10n.text("Total"), color: tint, day: day)
+                    }
+                } else {
+                    hoverRow(title: provider?.shortName ?? L10n.text("Total"), color: tint, day: day)
+                }
+            }
+            .font(.caption2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(.primary.opacity(0.1), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func hoverRow(title: String, color: Color, day: DailyUsage?) -> some View {
+        GridRow(alignment: .top) {
+            HStack(spacing: 5) {
+                Circle().fill(color).frame(width: 6, height: 6)
+                Text(title).fontWeight(.medium)
+            }
+            Text(day.map { Format.tokens($0.totalTokens) } ?? "—")
+                .monospacedDigit()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(day?.knownEstimatedCostUSD.map { "≈ \(Format.cost($0))" } ?? "—")
+                    .monospacedDigit()
+                if let day, day.isPartialCostEstimate {
+                    Text("partial estimate")
+                        .foregroundStyle(.secondary)
+                } else if day?.knownEstimatedCostUSD == nil {
+                    Text("no estimate")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -207,9 +318,7 @@ struct DailyUsageChart: View {
                     selectedDayDate = nil
                     return
                 }
-                selectedDayDate = days.min {
-                    abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
-                }?.date
+                selectedDayDate = DailyUsageChartSelection.day(at: date, in: days)?.date
             }
         )
     }
@@ -235,6 +344,7 @@ struct DailyUsageList: View {
     let days: [DailyUsage]
     let tint: Color
     let showsBreakdown: Bool
+    var providerDays: [AIProvider: [DailyUsage]] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -256,7 +366,12 @@ struct DailyUsageList: View {
             }
 
             ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
-                DailyUsageRow(day: day, tint: tint, showsBreakdown: showsBreakdown)
+                DailyUsageRow(
+                    day: day, tint: tint, showsBreakdown: showsBreakdown,
+                    providerDays: providerDays.compactMapValues { rows in
+                        DailyUsageChartSelection.day(at: day.date, in: rows)
+                    }
+                )
                     .padding(.vertical, 8)
 
                 if index < days.count - 1 {
@@ -271,6 +386,7 @@ private struct DailyUsageRow: View {
     let day: DailyUsage
     let tint: Color
     let showsBreakdown: Bool
+    let providerDays: [AIProvider: DailyUsage]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -308,6 +424,17 @@ private struct DailyUsageRow: View {
                 .frame(minWidth: 82, alignment: .trailing)
             }
 
+            if !providerDays.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(AIProvider.allCases) { provider in
+                        if let usage = providerDays[provider] {
+                            DailyPlatformUsageRow(provider: provider, day: usage)
+                        }
+                    }
+                }
+                .padding(.leading, 20)
+            }
+
             if showsBreakdown {
                 HStack(spacing: 16) {
                     compactMetric("Input", value: day.inputTokens ?? 0)
@@ -337,6 +464,44 @@ private struct DailyUsageRow: View {
                 .font(.caption.weight(.medium))
         }
         .frame(width: 58, alignment: .leading)
+    }
+}
+
+private struct DailyPlatformUsageRow: View {
+    let provider: AIProvider
+    let day: DailyUsage
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            HStack(spacing: 6) {
+                Circle().fill(provider.accentColor).frame(width: 6, height: 6)
+                Text(provider.shortName)
+                    .font(.caption.weight(.medium))
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(Format.tokens(day.totalTokens))
+                    .font(.caption.weight(.medium))
+                    .monospacedDigit()
+                Text("tokens")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 72, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(day.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—")
+                    .font(.caption.weight(.medium))
+                    .monospacedDigit()
+                Text(L10n.text(day.isPartialCostEstimate ? "partial estimate"
+                     : (day.estimatedCostUSD == nil ? "no estimate" : "estimated cost")))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(minWidth: 82, alignment: .trailing)
+        }
+        .padding(8)
+        .background(provider.accentColor.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+        .accessibilityElement(children: .combine)
     }
 }
 

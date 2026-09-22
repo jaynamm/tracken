@@ -30,7 +30,10 @@ struct TotalUsageView: View {
                         providerDays: total.dailyByProvider
                     )
                     Divider()
-                    DailyUsageList(days: total.daily, tint: .accentColor, showsBreakdown: false)
+                    DailyUsageList(
+                        days: total.daily, tint: .accentColor, showsBreakdown: false,
+                        providerDays: total.dailyByProvider
+                    )
                 }
                 .padding(16)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 14))
@@ -156,9 +159,9 @@ private struct TotalProviderCard: View {
                     .foregroundStyle(.secondary)
                 }
                 if provider == .anthropic {
-                    ClaudeLimitsView(compact: true)
+                    ClaudeLimitsView(compact: true, showsUpdateDate: false)
                 }
-                Text("Updated \(Format.relative(usage.updatedAt))")
+                Text("Updated \(Format.date(usage.updatedAt, time: true))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {

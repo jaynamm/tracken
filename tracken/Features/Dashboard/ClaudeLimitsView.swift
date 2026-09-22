@@ -3,6 +3,7 @@ import SwiftUI
 struct ClaudeLimitsView: View {
     @Environment(UsageStore.self) private var store
     var compact = false
+    var showsUpdateDate = true
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -16,11 +17,9 @@ struct ClaudeLimitsView: View {
                         window("5-hour", value: snapshot.fiveHour, now: context.date)
                         window("7-day", value: snapshot.sevenDay, now: context.date)
                     }
-                    Text("Last received \(Format.relative(snapshot.receivedDate))")
-                        .foregroundStyle(.secondary)
-                    if snapshot.mayBeOutdated(at: context.date) {
-                        Text("Values may be outdated; unchanged since \(Format.date(snapshot.valuesChangedDate, time: true)).")
-                            .foregroundStyle(.orange)
+                    if showsUpdateDate {
+                        Text("Updated \(Format.date(snapshot.receivedDate, time: true))")
+                            .foregroundStyle(.secondary)
                     }
                 } else {
                     Text("No limits received from the Claude Code terminal status line yet.")

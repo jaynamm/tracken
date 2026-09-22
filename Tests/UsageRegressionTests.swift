@@ -60,6 +60,7 @@ private actor SettingsPricingFixture {
         try await checkSessionRecords()
         try checkClaudeHistory()
         try TotalUsageTests.run()
+        try DailyUsageChartTests.run()
         try LocalizationTests.run()
         try await HourlyUsageTests.run()
         try await PricingRegressionTests.run()

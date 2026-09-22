@@ -23,7 +23,7 @@ struct UsageCard: View {
             }
 
             if provider == .anthropic {
-                ClaudeLimitsView()
+                ClaudeLimitsView(showsUpdateDate: state.usage == nil)
                 Divider()
             }
             if let usage = state.usage {
@@ -103,7 +103,8 @@ private struct UsageDetails: View {
             DailyUsageChart(
                 days: Array(days.reversed()),
                 tint: provider.accentColor,
-                showsBreakdown: usage.hasDetailedBreakdown
+                showsBreakdown: usage.hasDetailedBreakdown,
+                provider: provider
             )
             .id(provider)
 
@@ -221,7 +222,7 @@ private struct UpdatedLabel: View {
     let date: Date
 
     var body: some View {
-        Text("Updated \(Format.relative(date))")
+        Text("Updated \(Format.date(date, time: true))")
             .font(.caption2)
             .foregroundStyle(.tertiary)
     }

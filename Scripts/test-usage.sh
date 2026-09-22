@@ -9,7 +9,7 @@ trap 'rm -rf "$test_build"' EXIT
 xcrun swiftc -parse-as-library -swift-version 5 -default-isolation MainActor \
     -target "$(uname -m)-apple-macos26.3" \
     tracken/Models/Models.swift tracken/Services/*.swift tracken/Stores/UsageStore.swift \
-    tracken/Utilities/Localization.swift \
+    tracken/Utilities/Localization.swift tracken/Utilities/DailyUsageChartSelection.swift \
     Tests/*.swift -o "$test_build/usage-tests"
 "$test_build/usage-tests"
 
