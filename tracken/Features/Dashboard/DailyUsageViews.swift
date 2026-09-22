@@ -96,24 +96,9 @@ struct DailyUsageChart: View {
                                 selectedDayDate = nil
                             }
                         }
-
-                    if let selectedDay, let plotFrame = proxy.plotFrame {
-                        let frame = geometry[plotFrame]
-                        let width = min(330, geometry.size.width)
-                        let barRange = proxy.positionRange(forX: selectedDay.date)
-                        let barCenter = barRange.map { ($0.lowerBound + $0.upperBound) / 2 }
-                            ?? proxy.position(forX: selectedDay.date) ?? 0
-                        let x = min(max(0, frame.minX + barCenter - width / 2), geometry.size.width - width)
-                        hoverDetails(for: selectedDay)
-                            .frame(width: width)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .offset(x: x, y: frame.minY)
-                            .allowsHitTesting(false)
-                    }
                 }
             }
             .frame(height: stacksProviders ? 150 : 120)
-            .zIndex(1)
             .onChange(of: days.map(\.date)) {
                 selectedDayDate = nil
             }
@@ -140,7 +125,7 @@ struct DailyUsageChart: View {
         }
     }
 
-    private func hoverDetails(for day: DailyUsage) -> some View {
+    private func selectionDetails(for day: DailyUsage) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(Format.date(day.date))
                 .font(.caption.weight(.semibold))
@@ -158,7 +143,7 @@ struct DailyUsageChart: View {
 
                 if stacksProviders {
                     ForEach(chartProviders) { provider in
-                        hoverRow(
+                        selectionRow(
                             title: provider.shortName,
                             color: provider.accentColor,
                             day: DailyUsageChartSelection.day(
@@ -169,26 +154,25 @@ struct DailyUsageChart: View {
                     if chartProviders.count > 1 {
                         Divider()
                             .gridCellUnsizedAxes(.horizontal)
-                        hoverRow(title: L10n.text("Total"), color: tint, day: day)
+                        selectionRow(title: L10n.text("Total"), color: tint, day: day)
                     }
                 } else {
-                    hoverRow(title: provider?.shortName ?? L10n.text("Total"), color: tint, day: day)
+                    selectionRow(title: provider?.shortName ?? L10n.text("Total"), color: tint, day: day)
                 }
             }
             .font(.caption2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10))
         .overlay {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(.primary.opacity(0.1), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
         .accessibilityElement(children: .combine)
     }
 
-    private func hoverRow(title: String, color: Color, day: DailyUsage?) -> some View {
+    private func selectionRow(title: String, color: Color, day: DailyUsage?) -> some View {
         GridRow(alignment: .top) {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 6, height: 6)
@@ -199,13 +183,11 @@ struct DailyUsageChart: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(day?.knownEstimatedCostUSD.map { "≈ \(Format.cost($0))" } ?? "—")
                     .monospacedDigit()
-                if let day, day.isPartialCostEstimate {
-                    Text("partial estimate")
-                        .foregroundStyle(.secondary)
-                } else if day?.knownEstimatedCostUSD == nil {
-                    Text("no estimate")
-                        .foregroundStyle(.secondary)
-                }
+                // Keep every row two lines tall so hovering never moves the plot.
+                Text(L10n.text(day?.isPartialCostEstimate == true ? "partial estimate"
+                     : (day?.knownEstimatedCostUSD == nil ? "no estimate" : "estimated cost")))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
     }
@@ -269,45 +251,16 @@ struct DailyUsageChart: View {
     }
 
     private var chartHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text("Daily trend")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if let day = selectedDay ?? peakDay {
-                Text(chartSummary(for: day))
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(tint)
-                if stacksProviders {
-                    HStack(spacing: 12) {
-                        ForEach(chartProviders) { provider in
-                            if let usage = providerDays[provider]?.first(where: { $0.date == day.date }) {
-                                Text("\(provider.shortName): \(providerSummary(for: usage))")
-                                    .foregroundStyle(provider.accentColor)
-                            }
-                        }
-                    }
-                    .font(.caption2)
-                }
+            // Keep the detail panel in the layout even when the pointer leaves.
+            // Only its values change; the bars stay in the same place.
+            if let day = selectedDay ?? peakDay ?? days.last {
+                selectionDetails(for: day)
             }
         }
-    }
-
-    private func providerSummary(for day: DailyUsage) -> String {
-        if showsCost {
-            return day.knownEstimatedCostUSD.map {
-                "\(Format.cost($0))\(day.isPartialCostEstimate ? L10n.text(" (partial)") : "")"
-            } ?? "—"
-        }
-        return L10n.format("%@ tokens", Format.compactTokens(day.totalTokens))
-    }
-
-    private func chartSummary(for day: DailyUsage) -> String {
-        let date = Format.day(day.date)
-        let tokens = Format.tokens(day.totalTokens)
-        let cost = day.knownEstimatedCostUSD.map {
-            "≈ \(Format.cost($0))\(day.isPartialCostEstimate ? L10n.text(" (partial)") : "")"
-        } ?? L10n.text("Estimate unavailable")
-        return "\(date): \(tokens) • \(cost)"
     }
 
     private var selectedDate: Binding<Date?> {
