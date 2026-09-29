@@ -156,6 +156,10 @@ nonisolated struct CodexRateLimit: Equatable, Sendable {
     let usedPercent: Double
     let windowDurationMinutes: Int
     let resetsAt: Date?
+
+    func hasExpired(at date: Date) -> Bool {
+        resetsAt.map { $0 <= date } ?? false
+    }
 }
 
 nonisolated enum UsageGranularity: Equatable, Sendable {
@@ -174,6 +178,9 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
     let account: ProviderAccount?
     let lifetimeTokens: Int?
     let rateLimit: CodexRateLimit?
+    let secondaryRateLimit: CodexRateLimit?
+
+    var rateLimits: [CodexRateLimit] { [rateLimit, secondaryRateLimit].compactMap { $0 } }
 
     var id: String { provider.id }
     var hasDetailedBreakdown: Bool { granularity == .inputOutput }
@@ -188,7 +195,8 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
         updatedAt: Date = Date(),
         account: ProviderAccount? = nil,
         lifetimeTokens: Int? = nil,
-        rateLimit: CodexRateLimit? = nil
+        rateLimit: CodexRateLimit? = nil,
+        secondaryRateLimit: CodexRateLimit? = nil
     ) {
         self.provider = provider
         self.daily = daily
@@ -204,6 +212,7 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
         self.account = account
         self.lifetimeTokens = lifetimeTokens
         self.rateLimit = rateLimit
+        self.secondaryRateLimit = secondaryRateLimit
     }
 
     /// Returns a complete, newest-first calendar window and fills missing dates.
@@ -288,7 +297,8 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
                           granularity: granularity,
                           estimatedCostUSD: Self.completeDailyEstimatedCost(for: days),
                           updatedAt: updatedAt, account: account,
-                          lifetimeTokens: lifetimeTokens, rateLimit: rateLimit)
+                          lifetimeTokens: lifetimeTokens, rateLimit: rateLimit,
+                          secondaryRateLimit: secondaryRateLimit)
     }
 
     var last14Days: [DailyUsage] { recentDays(count: 14) }

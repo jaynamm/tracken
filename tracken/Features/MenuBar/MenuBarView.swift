@@ -19,6 +19,7 @@ struct MenuBarView: View {
                 }
             }
 
+            CodexLimitsView()
             ClaudeLimitsView(compact: true)
 
             if !store.connectedProviders.isEmpty {

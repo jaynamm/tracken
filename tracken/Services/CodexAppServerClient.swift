@@ -57,7 +57,8 @@ final class CodexAppServerClient: CodexUsageProviding {
                 planName: account.planType ?? limits.codexLimits?.planType
             ),
             lifetimeTokens: usage.summary?.lifetimeTokens,
-            rateLimit: limits.codexLimits?.primary.map(Self.makeRateLimit)
+            rateLimit: limits.codexLimits?.primary?.rateLimit,
+            secondaryRateLimit: limits.codexLimits?.secondary?.rateLimit
         )
     }
 
@@ -127,14 +128,6 @@ final class CodexAppServerClient: CodexUsageProviding {
         return dailyByDate.values.sorted { $0.date > $1.date }
     }
 
-    private static func makeRateLimit(from window: RateLimitsResponse.Window) -> CodexRateLimit {
-        CodexRateLimit(
-            usedPercent: window.usedPercent,
-            windowDurationMinutes: window.windowDurationMins,
-            resetsAt: window.resetsAt.map(Date.init(timeIntervalSince1970:))
-        )
-    }
-
     private static let usageDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -183,6 +176,7 @@ nonisolated struct RateLimitsResponse: Decodable {
 
     nonisolated struct RateLimits: Decodable {
         let primary: Window?
+        let secondary: Window?
         let planType: String?
     }
 
@@ -190,5 +184,10 @@ nonisolated struct RateLimitsResponse: Decodable {
         let usedPercent: Double
         let windowDurationMins: Int
         let resetsAt: Double?
+
+        var rateLimit: CodexRateLimit {
+            CodexRateLimit(usedPercent: usedPercent, windowDurationMinutes: windowDurationMins,
+                           resetsAt: resetsAt.map(Date.init(timeIntervalSince1970:)))
+        }
     }
 }

@@ -63,7 +63,7 @@ nonisolated struct PricingSnapshot: Codable, Equatable, Sendable {
     static func bundled(for provider: AIProvider) -> PricingSnapshot {
         let text = provider == .codex ? PricingDefaults.openAI : PricingDefaults.claude
         return PricingSnapshot(providerID: provider.rawValue,
-                               checkedAt: Date(timeIntervalSince1970: 1_788_739_200),
+                               checkedAt: Date(timeIntervalSince1970: provider == .codex ? 1_788_739_200 : 1_790_640_000),
                                isBundled: true,
                                rates: (try? OfficialPricingParser.parse(text, provider: provider)) ?? [:])
     }
@@ -145,7 +145,9 @@ nonisolated enum OfficialPricingParser {
 
     private static func amount(_ cell: String, claude: Bool) throws -> Double? {
         if cell == "-" { return nil }
-        let pattern = claude ? #"^\$([0-9]+(?:\.[0-9]+)?) / MTok(?:[0-9]+)?$"# : #"^\$([0-9]+(?:\.[0-9]+)?)$"#
+        // The Markdown endpoint preserves numeric HTML footnotes; older exports
+        // flattened them to digits. Accept either only after the MTok unit.
+        let pattern = claude ? #"^\$([0-9]+(?:\.[0-9]+)?) / MTok(?:[0-9]+|<sup>[0-9]+</sup>)?$"# : #"^\$([0-9]+(?:\.[0-9]+)?)$"#
         let regex = try NSRegularExpression(pattern: pattern)
         guard let match = regex.firstMatch(in: cell, range: NSRange(cell.startIndex..., in: cell)),
               let range = Range(match.range(at: 1), in: cell), let value = Double(cell[range]),

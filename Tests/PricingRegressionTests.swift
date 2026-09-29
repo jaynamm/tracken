@@ -24,6 +24,21 @@ private actor PricingHTTPFixture {
     static func run() async throws {
         let openAI = try OfficialPricingParser.parse(PricingDefaults.openAI + "\n### Batch pricing data\n| invalid |", provider: .codex)
         let claude = try OfficialPricingParser.parse(PricingDefaults.claude, provider: .anthropic)
+        let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/claude-pricing-2026-09-29.md")
+        let officialClaudeText = try String(contentsOf: fixtureURL, encoding: .utf8)
+        let officialClaude = try OfficialPricingParser.parse(officialClaudeText, provider: .anthropic)
+        try checkPrice(officialClaude.count == 19 && officialClaude == claude,
+                       "Bundled Claude prices match the raw official Markdown table, excluding Batch prices")
+        try checkPrice(officialClaude["claude-opus-5-5"] == TokenPrice(input: 4, cachedInput: 0.2, cacheWrite: 5,
+                                                                     output: 20, cacheWrite1h: 8)
+                       && officialClaude["claude-sonnet-5-5"]?.input == 2
+                       && officialClaude["claude-sonnet-5"]?.output == 10,
+                       "Numeric HTML footnotes on input, output and cache rates preserve the latest prices")
+        let flattened = officialClaudeText.replacingOccurrences(of: "<sup>", with: "")
+            .replacingOccurrences(of: "</sup>", with: "")
+        try checkPrice(try OfficialPricingParser.parse(flattened, provider: .anthropic) == officialClaude,
+                       "Previously supported flattened footnotes remain valid")
         try checkPrice(openAI["gpt-6-astra"]?.input == 10 && openAI["gpt-5.4-mini"]?.cachedInput == 0.075,
                        "Parse standard rates without batch contamination")
         try checkPrice(claude["claude-fable-5-1"]?.cachedInput == 0.25 && claude["claude-sonnet-5"]?.cacheWrite1h == 4,
@@ -37,7 +52,10 @@ private actor PricingHTTPFixture {
         try checkPrice(snapshot.rate(for: "gpt-5.6-sol-2026-09-01") != nil && snapshot.rate(for: "gpt-5.6-sol-pro") == nil,
                        "Only dated aliases inherit model rates")
         for broken in ["<html>blocked</html>", PricingDefaults.openAI.replacingOccurrences(of: "$4.00", with: "$NaN"),
-                       PricingDefaults.claude.replacingOccurrences(of: "Base input tokens", with: "Price per 1000 tokens")] {
+                       PricingDefaults.claude.replacingOccurrences(of: "Base input tokens", with: "Price per 1000 tokens"),
+                       officialClaudeText.replacingOccurrences(of: "<sup>1</sup>", with: "<sup>unknown</sup>"),
+                       officialClaudeText.replacingOccurrences(of: "$4 / MTok", with: "$4 / KTok"),
+                       officialClaudeText.replacingOccurrences(of: "$4 / MTok", with: "$4 / MTok<script>1</script>")] {
             do {
                 _ = try OfficialPricingParser.parse(broken, provider: broken.contains("Claude") ? .anthropic : .codex)
                 throw PricingTestFailure(message: "Malformed pricing accepted")
@@ -75,10 +93,13 @@ private actor PricingHTTPFixture {
         await http.set(status: 200, document: changedText)
         try checkPrice(await catalog.refresh(.codex, force: true), "Changed price triggers recomputation")
         try await checkRepricing(catalog: catalog, root: root)
-        await http.set(status: 200, document: PricingDefaults.claude)
+        await http.set(status: 200, document: officialClaudeText)
         _ = await catalog.refresh(.anthropic, force: true)
-        try checkPrice(await catalog.snapshot(for: .anthropic).rates["claude-sonnet-5"]?.input == 2,
-                       "Provider caches are independent")
+        let refreshedClaude = await catalog.snapshot(for: .anthropic)
+        try checkPrice(!refreshedClaude.isBundled && refreshedClaude.rates == officialClaude
+                       && refreshedClaude.rates["claude-opus-5-5"]?.input == 4,
+                       "The raw Claude HTTP response validates and persists independently of Codex prices")
+        try checkPrice(await catalog.error(for: .anthropic) == nil, "Valid Claude footnotes do not leave a refresh error")
         try Data("broken cache".utf8).write(to: root.appendingPathComponent("codex.json"))
         let recovered = PricingCatalog(directory: root)
         try checkPrice(await recovered.snapshot(for: .codex).isBundled, "Corrupt disk cache falls back to bundled prices")

@@ -120,6 +120,54 @@
         }
       }
     },
+    "%lld-day": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld-day"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld일"
+          }
+        }
+      }
+    },
+    "%lld-hour": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld-hour"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld시간"
+          }
+        }
+      }
+    },
+    "%lld-minute": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld-minute"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld분"
+          }
+        }
+      }
+    },
     "14d": {
       "extractionState": "manual",
       "localizations": {
@@ -558,6 +606,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Codex가 유효한 로그인 URL을 반환하지 않았습니다."
+          }
+        }
+      }
+    },
+    "Codex subscription limits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex subscription limits"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex 구독 사용 한도"
           }
         }
       }

@@ -156,6 +156,30 @@ private actor SettingsPricingFixture {
         try expect(limits.codexLimits?.primary?.usedPercent == 14, "Prefer the current Codex bucket")
         let legacy = try JSONDecoder().decode(RateLimitsResponse.self, from: Data(#"{"rateLimits":{"primary":{"usedPercent":20,"windowDurationMins":300}}}"#.utf8))
         try expect(legacy.codexLimits?.primary?.usedPercent == 20, "Legacy rate-limit fallback")
+
+        let both = try JSONDecoder().decode(RateLimitsResponse.self, from: Data(#"{"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":14,"windowDurationMins":300,"resetsAt":1790658000},"secondary":{"usedPercent":67,"windowDurationMins":10080,"resetsAt":1791244800}},"codex_other":{"primary":{"usedPercent":99,"windowDurationMins":60}}}}"#.utf8))
+        let usage = TokenUsage(provider: .codex, daily: [],
+                               rateLimit: both.codexLimits?.primary?.rateLimit,
+                               secondaryRateLimit: both.codexLimits?.secondary?.rateLimit)
+        try expect(usage.rateLimits.map(\.usedPercent) == [14, 67]
+                   && usage.rateLimits.map(\.windowDurationMinutes) == [300, 10080],
+                   "Menu limits must retain both Codex windows without using another bucket")
+        try expect(usage.displayUsage(dayCount: 14).rateLimits == usage.rateLimits,
+                   "Display normalization must retain both quota windows")
+        let reset = Date(timeIntervalSince1970: 1_790_658_000)
+        try expect(usage.rateLimit?.hasExpired(at: reset.addingTimeInterval(-1)) == false
+                   && usage.rateLimit?.hasExpired(at: reset) == true,
+                   "An expired quota must await an update instead of displaying old usage or zero")
+        let weeklyOnly = try JSONDecoder().decode(RateLimitsResponse.self, from: Data(#"{"rateLimitsByLimitId":{"codex":{"primary":null,"secondary":{"usedPercent":67,"windowDurationMins":10080}}}}"#.utf8))
+        let weeklyUsage = TokenUsage(provider: .codex, daily: [],
+                                    rateLimit: weeklyOnly.codexLimits?.primary?.rateLimit,
+                                    secondaryRateLimit: weeklyOnly.codexLimits?.secondary?.rateLimit)
+        try expect(weeklyUsage.rateLimits.count == 1 && weeklyUsage.rateLimits.first?.windowDurationMinutes == 10080
+                   && weeklyUsage.rateLimits.first?.hasExpired(at: reset) == false,
+                   "A weekly-only quota remains available even without a primary window or reset date")
+        let missing = try JSONDecoder().decode(RateLimitsResponse.self, from: Data(#"{"rateLimits":null,"rateLimitsByLimitId":null}"#.utf8))
+        try expect(missing.codexLimits == nil && legacy.codexLimits?.secondary == nil,
+                   "Missing windows must not become fabricated zero-percent limits")
     }
 
     @MainActor private static func checkSessionRecords() async throws {
