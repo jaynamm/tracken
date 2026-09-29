@@ -6,12 +6,13 @@
 import SwiftUI
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
-    case language, codex, claude
+    case menuBar, language, codex, claude
 
     var id: Self { self }
 
     var title: String {
         switch self {
+        case .menuBar: L10n.text("Menu bar")
         case .language: L10n.text("Language")
         case .codex: AIProvider.codex.shortName
         case .claude: AIProvider.anthropic.shortName
@@ -20,6 +21,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
+        case .menuBar: "menubar.rectangle"
         case .language: "globe"
         case .codex: AIProvider.codex.symbolName
         case .claude: AIProvider.anthropic.symbolName
@@ -30,9 +32,9 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable private var settings = AppSettings.shared
-    @State private var selectedPage: SettingsPage? = .language
+    @State private var selectedPage: SettingsPage? = .menuBar
 
-    private var currentPage: SettingsPage { selectedPage ?? .language }
+    private var currentPage: SettingsPage { selectedPage ?? .menuBar }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,6 +70,8 @@ struct SettingsView: View {
 
                     Form {
                         switch currentPage {
+                        case .menuBar:
+                            menuBarSettings
                         case .language:
                             languageSettings
                         case .codex:
@@ -84,6 +88,22 @@ struct SettingsView: View {
         }
         .frame(width: 760, height: 620)
         .environment(\.locale, settings.language.locale)
+    }
+
+    private var menuBarSettings: some View {
+        Section {
+            Picker("Menu bar display", selection: $settings.menuBarDisplayStyle) {
+                ForEach(MenuBarDisplayStyle.allCases) { style in
+                    Text(L10n.text(style.titleKey)).tag(style)
+                }
+            }
+            Text("Shows the highest usage among each provider's current subscription limits.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Gauges show the percentage used, not remaining tokens. Missing or expired limits appear as —. Updates follow the existing hourly refresh.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private var languageSettings: some View {

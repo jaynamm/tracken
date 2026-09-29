@@ -15,9 +15,13 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
 final class AppSettings {
     static let shared = AppSettings()
     static let languageKey = "appLanguage"
+    static let menuBarDisplayStyleKey = "menuBarDisplayStyle"
 
     var language: AppLanguage {
         didSet { defaults.set(language.rawValue, forKey: Self.languageKey) }
+    }
+    var menuBarDisplayStyle: MenuBarDisplayStyle {
+        didSet { defaults.set(menuBarDisplayStyle.rawValue, forKey: Self.menuBarDisplayStyleKey) }
     }
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -25,6 +29,8 @@ final class AppSettings {
         self.defaults = defaults
         language = defaults.string(forKey: Self.languageKey).flatMap(AppLanguage.init(rawValue:))
             ?? (preferredLanguages.first?.hasPrefix("ko") == true ? .korean : .english)
+        menuBarDisplayStyle = defaults.string(forKey: Self.menuBarDisplayStyleKey)
+            .flatMap(MenuBarDisplayStyle.init(rawValue:)) ?? .gaugesAndPercent
     }
 }
 

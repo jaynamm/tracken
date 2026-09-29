@@ -120,6 +120,40 @@
         }
       }
     },
+    "%@: %@ used (%@)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %@ used (%@)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %@ 사용 (%@)"
+          }
+        }
+      }
+    },
+    "%@: No current limit data": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: No current limit data"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: 유효한 한도 정보 없음"
+          }
+        }
+      }
+    },
     "%lld-day": {
       "localizations": {
         "en": {
@@ -1185,6 +1219,40 @@
         }
       }
     },
+    "Gauges and percentages": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gauges and percentages"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게이지와 퍼센트"
+          }
+        }
+      }
+    },
+    "Gauges show the percentage used, not remaining tokens. Missing or expired limits appear as —. Updates follow the existing hourly refresh.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gauges show the percentage used, not remaining tokens. Missing or expired limits appear as —. Updates follow the existing hourly refresh."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게이지는 구독 한도의 사용률을 나타냅니다. 수신되지 않거나 만료된 한도는 —로 표시하며, 기존의 매시간 갱신 주기를 따릅니다."
+          }
+        }
+      }
+    },
     "History period": {
       "extractionState": "manual",
       "localizations": {
@@ -1198,6 +1266,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "조회 기간"
+          }
+        }
+      }
+    },
+    "Icon only": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Icon only"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아이콘만"
           }
         }
       }
@@ -1520,6 +1605,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "긴 컨텍스트 캐시 읽기 %@ · 쓰기 %@"
+          }
+        }
+      }
+    },
+    "Menu bar": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu bar"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메뉴 막대"
+          }
+        }
+      }
+    },
+    "Menu bar display": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu bar display"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "메뉴 막대 표시"
           }
         }
       }
@@ -2218,6 +2337,23 @@
         }
       }
     },
+    "Shows the highest usage among each provider's current subscription limits.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the highest usage among each provider's current subscription limits."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "공급자별로 현재 유효한 구독 한도 중 사용률이 가장 높은 값을 표시합니다."
+          }
+        }
+      }
+    },
     "Sign in to Codex with your ChatGPT account.": {
       "extractionState": "manual",
       "localizations": {
@@ -2638,6 +2774,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "불러온 플랫폼 %lld개 / 전체 %lld개 · 매시간 갱신"
+          }
+        }
+      }
+    },
+    "Usage gauges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage gauges"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용량 게이지"
           }
         }
       }

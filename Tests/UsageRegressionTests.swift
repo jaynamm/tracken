@@ -62,6 +62,7 @@ private actor SettingsPricingFixture {
         try TotalUsageTests.run()
         try DailyUsageChartTests.run()
         try LocalizationTests.run()
+        try MenuBarGaugeTests.run()
         try await HourlyUsageTests.run()
         try await PricingRegressionTests.run()
         try await CodexHistoryTests.run()

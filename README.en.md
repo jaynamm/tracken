@@ -229,7 +229,11 @@ Provider pages also show per-model tokens and estimated costs. Claude includes i
 
 ### Menu bar popover
 
-Click the tracken icon in the macOS menu bar. The menu bar itself displays an icon; the numerical values appear inside the popover:
+By default, the menu bar displays the tracken icon alongside Codex and Claude subscription usage gauges and percentages. Choose **Settings → Menu bar → Menu bar display → Icon only / Usage gauges / Gauges and percentages**. Changes apply immediately and persist across launches.
+
+Each gauge shows the **highest usage percentage** among that provider's current short-term and weekly limits. Codex is the top row and Claude is the bottom row; hover to see the selected limit window. Missing or expired limits appear as `—`, distinct from actual 0% usage. Values follow the existing hourly automatic refresh or manual refresh, while expiry is checked every 30 seconds.
+
+Click the tracken icon or gauges in the macOS menu bar to open the popover:
 
 - Each provider's 14-day tokens, today's tokens and estimated cost, and connection status
 - Codex primary/secondary limits and Claude 5-hour/7-day limits

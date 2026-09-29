@@ -50,12 +50,11 @@ struct trackenApp: App {
                 .environment(store)
         }
 
-        MenuBarExtra(
-            "tracken",
-            image: "MenuBarIcon"
-        ) {
+        MenuBarExtra {
             MenuBarView()
                 .environment(store)
+        } label: {
+            MenuBarUsageLabel(store: store)
         }
         .menuBarExtraStyle(.window)
     }
