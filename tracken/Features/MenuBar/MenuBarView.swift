@@ -61,7 +61,7 @@ struct MenuBarView: View {
                 Label("Combined", systemImage: "sum")
                     .font(.callout.weight(.medium))
                 Spacer()
-                Text(Format.compactTokens(store.combinedLast14DaysTokens))
+                Text(store.totalUsage.hasRecordedDays ? Format.compactTokens(store.combinedLast14DaysTokens) : "—")
                     .font(.callout.weight(.semibold))
                 Text("14d")
                     .font(.caption)
@@ -124,7 +124,8 @@ private struct MenuBarProviderCard: View {
     private func usageContent(_ usage: TokenUsage) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(Format.compactTokens(usage.last14DaysTotalTokens))
+                Text(usage.last14Days.contains(where: { !$0.isMissing })
+                     ? Format.compactTokens(usage.last14DaysTotalTokens) : "—")
                     .font(.title2.weight(.bold))
                     .contentTransition(.numericText())
                 Text("tokens")
@@ -137,7 +138,7 @@ private struct MenuBarProviderCard: View {
             HStack {
                 CompactMetric(
                     title: "Today",
-                    value: Format.compactTokens(usage.last14Days.first?.totalTokens ?? 0)
+                    value: usage.last14Days.first.flatMap { $0.isMissing ? nil : Format.compactTokens($0.totalTokens) } ?? "—"
                 )
                 Spacer()
                 secondaryMetric(for: usage)

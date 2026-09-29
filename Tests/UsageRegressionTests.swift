@@ -64,6 +64,7 @@ private actor SettingsPricingFixture {
         try LocalizationTests.run()
         try await HourlyUsageTests.run()
         try await PricingRegressionTests.run()
+        try await CodexHistoryTests.run()
         print("PASS: usage store, Claude local history, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")
     }
 
@@ -214,23 +215,23 @@ private actor SettingsPricingFixture {
             try data.write(to: dir.appendingPathComponent(name + ".jsonl"))
             return dir
         }
-        func read(_ directory: String) async -> [ModelUsage] {
-            let usage = await CodexSessionCostEstimator(sessionsURL: root.appendingPathComponent(directory))
+        func read(_ directory: String) async throws -> [ModelUsage] {
+            let usage = try await CodexSessionCostEstimator(sessionsURL: root.appendingPathComponent(directory))
                 .estimateRecentUsage(dayCount: 14, now: now)
             return usage.values.flatMap { $0 }
         }
         let u = tokens(100, 10)
         _ = try write("legacy", "a", [context(), legacy(u, total: u), legacy(u, total: u, at: 11), legacy(u, total: tokens(200, 20), at: 12)])
-        try expect(await read("legacy").first?.totalTokens == 220, "Repeated legacy notification counted twice")
+        try expect(try await read("legacy").first?.totalTokens == 220, "Repeated legacy notification counted twice")
         _ = try write("modern/2020/01/01", "a", [context(), modern("shared", u), legacy(u, total: u)])
         _ = try write("modern/2020/01/01", "fork", [context(), modern("shared", u), modern("new", u, at: 20)])
-        try expect(await read("modern").first?.totalTokens == 220, "Resumed old task, copied response, modern/legacy pair")
+        try expect(try await read("modern").first?.totalTokens == 220, "Resumed old task, copied response, modern/legacy pair")
         _ = try write("upgrade", "a", [context(), legacy(tokens(40, 10), total: tokens(40, 10), at: 1), modern("after-upgrade", u), legacy(u, total: tokens(140, 20))])
-        try expect(await read("upgrade").first?.totalTokens == 160, "Pre-upgrade usage must be retained")
+        try expect(try await read("upgrade").first?.totalTokens == 160, "Pre-upgrade usage must be retained")
         _ = try write("outside", "a", [context(), modern("old", u, at: -20 * 86_400), modern("future", u, at: 2 * 86_400)])
-        try expect(await read("outside").isEmpty, "Out-of-window records must not be counted")
+        try expect(try await read("outside").isEmpty, "Out-of-window records must not be counted")
         _ = try write("unknown", "a", [context("unknown-model"), modern("unknown", u)])
-        let unknown = await read("unknown")
+        let unknown = try await read("unknown")
         try expect(unknown.first?.totalTokens == 110 && unknown.first?.estimatedCostUSD == nil, "No invented model price")
         var totalOnly = tokens(0, 0)
         totalOnly["total_tokens"] = 8_676
@@ -241,7 +242,7 @@ private actor SettingsPricingFixture {
             legacy(totalOnly, total: totalOnly, at: 11),
             legacy(laterTotalOnly, total: laterTotalOnly, at: 12)
         ])
-        let summary = await read("summary")
+        let summary = try await read("summary")
         try expect(summary.first?.totalTokens == 17_676 && summary.first?.inputTokens == nil
                    && summary.first?.outputTokens == nil && summary.first?.estimatedCostUSD == nil,
                    "Total-only history must retain tokens, deduplicate unchanged totals, and leave price unknown")
@@ -259,30 +260,30 @@ private actor SettingsPricingFixture {
                    && displayed.estimatedCostUSD == nil,
                    "Display keeps the official total and does not show a partial cost as a complete estimate")
         _ = try write("empty", "a", [legacy(tokens(0, 0), total: tokens(0, 0))])
-        try expect(await read("empty").isEmpty, "Genuinely empty records must not create unpriced model usage")
+        try expect(try await read("empty").isEmpty, "Genuinely empty records must not create unpriced model usage")
         _ = try write("known-summary", "a", [context(), modern("summary", totalOnly)])
-        let knownSummary = await read("known-summary")
+        let knownSummary = try await read("known-summary")
         try expect(knownSummary.first?.totalTokens == 8_676 && knownSummary.first?.estimatedCostUSD == nil,
                    "Knowing the model does not supply a missing input/output split")
         try expect(knownSummary.first?.knownEstimatedCostUSD == nil,
                    "Total-only records must not invent even a partial cost")
         _ = try write("mixed-summary", "a", [context(), modern("summary", totalOnly), modern("priced", u, at: 20)])
-        let mixedSummary = await read("mixed-summary")
+        let mixedSummary = try await read("mixed-summary")
         try expect(mixedSummary.first?.totalTokens == 8_786
                    && mixedSummary.first?.isPartialCostEstimate == true
                    && abs((mixedSummary.first?.knownEstimatedCostUSD ?? -1) - 0.0006) < 1e-10,
                    "Estimator preserves priced responses alongside total-only records for the same model")
         _ = try write("cache", "a", [context(), modern("cached", tokens(100, 10, cached: 60, write: 10))])
-        let cache = await read("cache")
+        let cache = try await read("cache")
         let expected: Double = 394.0 / 1_000_000.0
         try expect(abs((cache.first?.estimatedCostUSD ?? -1) - expected) < 1e-10, "Cache tokens priced once")
         _ = try write("long", "a", [context(), modern("long", tokens(272_001, 100))])
-        let long = await read("long")
+        let long = try await read("long")
         let longExpected: Double = 2_179_008.0 / 1_000_000.0
         try expect(abs((long.first?.estimatedCostUSD ?? -1) - longExpected) < 1e-10, "Long-context price multiplier")
         for (model, inputRate, outputRate) in [("gpt-5.6-terra", 2.0, 12.0), ("gpt-5.6-luna", 0.2, 1.2)] {
             _ = try write(model, "a", [context(model), modern(model, u)])
-            let usage = await read(model)
+            let usage = try await read(model)
             try expect(abs((usage.first?.estimatedCostUSD ?? -1) - (100 * inputRate + 10 * outputRate) / 1_000_000) < 1e-10,
                        "Standard pricing for \(model)")
         }

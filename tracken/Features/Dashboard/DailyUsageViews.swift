@@ -178,7 +178,7 @@ struct DailyUsageChart: View {
                 Circle().fill(color).frame(width: 6, height: 6)
                 Text(title).fontWeight(.medium)
             }
-            Text(day.map { Format.tokens($0.totalTokens) } ?? "—")
+            Text(day.flatMap { $0.isMissing ? nil : Format.tokens($0.totalTokens) } ?? "—")
                 .monospacedDigit()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(day?.knownEstimatedCostUSD.map { "≈ \(Format.cost($0))" } ?? "—")
@@ -206,7 +206,7 @@ struct DailyUsageChart: View {
                 .accessibilityLabel("\(provider.shortName), \(Format.date(day.date))")
                 .accessibilityValue("\(Format.cost(cost)), \(L10n.text(day.isPartialCostEstimate ? "partial estimate" : "estimated cost"))")
             }
-        } else {
+        } else if !day.isMissing {
             BarMark(
                 x: .value(L10n.text("Day"), day.date, unit: .day),
                 y: .value(L10n.text("Tokens"), day.totalTokens),
@@ -241,7 +241,7 @@ struct DailyUsageChart: View {
                 stacking: .standard
             )
             .foregroundStyle(by: .value(L10n.text("Type"), L10n.text("Input")))
-        } else {
+        } else if !day.isMissing {
             BarMark(
                 x: .value(L10n.text("Day"), day.date, unit: .day),
                 y: .value(L10n.text("Tokens"), day.totalTokens)
@@ -318,17 +318,19 @@ struct DailyUsageList: View {
                     .padding(.bottom, 4)
             }
 
-            ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
-                DailyUsageRow(
-                    day: day, tint: tint, showsBreakdown: showsBreakdown,
-                    providerDays: providerDays.compactMapValues { rows in
-                        DailyUsageChartSelection.day(at: day.date, in: rows)
-                    }
-                )
-                    .padding(.vertical, 8)
+            LazyVStack(spacing: 0) {
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                    DailyUsageRow(
+                        day: day, tint: tint, showsBreakdown: showsBreakdown,
+                        providerDays: providerDays.compactMapValues { rows in
+                            DailyUsageChartSelection.day(at: day.date, in: rows)
+                        }
+                    )
+                        .padding(.vertical, 8)
 
-                if index < days.count - 1 {
-                    Divider()
+                    if index < days.count - 1 {
+                        Divider()
+                    }
                 }
             }
         }
@@ -345,21 +347,21 @@ private struct DailyUsageRow: View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(Format.day(day.date))
+                    Text(Format.date(day.date))
                         .font(.callout.weight(.medium))
                     Text(Format.weekday(day.date))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                .frame(width: 64, alignment: .leading)
+                .frame(width: 92, alignment: .leading)
 
                 Spacer(minLength: 8)
 
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(Format.tokens(day.totalTokens))
+                    Text(day.isMissing ? "—" : Format.tokens(day.totalTokens))
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(day.totalTokens == 0 ? Color.secondary : tint)
-                    Text("tokens")
+                    Text(L10n.text(day.isMissing ? "No recorded data" : "tokens"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -433,7 +435,7 @@ private struct DailyPlatformUsageRow: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Format.tokens(day.totalTokens))
+                Text(day.isMissing ? "—" : Format.tokens(day.totalTokens))
                     .font(.caption.weight(.medium))
                     .monospacedDigit()
                 Text("tokens")

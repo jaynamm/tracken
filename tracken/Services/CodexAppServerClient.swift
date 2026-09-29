@@ -18,18 +18,22 @@ protocol CodexUsageProviding: AnyObject {
 final class CodexAppServerClient: CodexUsageProviding {
     private let transport: CodexAppServerTransport
     private let costEstimator: any CodexSessionCostEstimating
+    private let history: CodexAccountUsageHistory
 
     init() {
         transport = CodexAppServerTransport()
         costEstimator = CodexSessionCostEstimator()
+        history = CodexAccountUsageHistory()
     }
 
     init(
         transport: CodexAppServerTransport,
-        costEstimator: any CodexSessionCostEstimating = CodexSessionCostEstimator()
+        costEstimator: any CodexSessionCostEstimating = CodexSessionCostEstimator(),
+        history: CodexAccountUsageHistory = CodexAccountUsageHistory()
     ) {
         self.transport = transport
         self.costEstimator = costEstimator
+        self.history = history
     }
 
     func fetchUsage() async throws -> TokenUsage {
@@ -37,12 +41,21 @@ final class CodexAppServerClient: CodexUsageProviding {
             throw CodexAppServerError.notSignedIn
         }
 
-        async let usageResponse: UsageResponse = transport.request(method: "account/usage/read")
-        async let limitsResponse: RateLimitsResponse = transport.request(method: "account/rateLimits/read")
-        async let localEstimates = costEstimator.estimateRecentUsage(dayCount: 14, now: Date())
+        async let usageResponse = try? await transport.request(method: "account/usage/read", as: UsageResponse.self)
+        async let limitsResponse = try? await transport.request(method: "account/rateLimits/read", as: RateLimitsResponse.self)
+        async let localEstimates = costEstimator.estimateRecentUsage(dayCount: nil, now: Date())
         let (usage, limits, estimates) = try await (usageResponse, limitsResponse, localEstimates)
 
-        let officialDaily = (usage.dailyUsageBuckets ?? []).compactMap(Self.makeDailyUsage)
+        let receivedDaily = usage?.dailyUsageBuckets.map { $0.compactMap(Self.makeDailyUsage) }
+        let officialDaily: [DailyUsage]
+        // Account/read exposes email, not a stable workspace identifier. Keep
+        // account totals separate by normalized login email and never use a
+        // shared fallback key when identity is absent.
+        if let email = account.email?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
+            officialDaily = try await history.merge(account: email.lowercased(), daily: receivedDaily)
+        } else {
+            officialDaily = receivedDaily ?? []
+        }
         let daily = Self.merge(officialDaily: officialDaily, localEstimates: estimates)
         let modelUsage = TokenUsage.aggregateModelUsage(estimates.values.flatMap { $0 })
 
@@ -54,11 +67,15 @@ final class CodexAppServerClient: CodexUsageProviding {
             estimatedCostUSD: TokenUsage.completeDailyEstimatedCost(for: daily),
             account: ProviderAccount(
                 email: account.email,
-                planName: account.planType ?? limits.codexLimits?.planType
+                planName: account.planType ?? limits?.codexLimits?.planType
             ),
-            lifetimeTokens: usage.summary?.lifetimeTokens,
-            rateLimit: limits.codexLimits?.primary?.rateLimit,
-            secondaryRateLimit: limits.codexLimits?.secondary?.rateLimit
+            lifetimeTokens: usage?.summary?.lifetimeTokens,
+            rateLimit: limits?.codexLimits?.primary?.rateLimit,
+            secondaryRateLimit: limits?.codexLimits?.secondary?.rateLimit,
+            fillsMissingDaysWithZero: false,
+            historyNotice: receivedDaily == nil
+                ? "Account daily totals could not be refreshed. Showing saved totals and local history."
+                : nil
         )
     }
 

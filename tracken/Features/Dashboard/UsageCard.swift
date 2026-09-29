@@ -27,7 +27,8 @@ struct UsageCard: View {
                 Divider()
             }
             if let usage = state.usage {
-                UsageDetails(usage: usage.displayUsage(dayCount: dayCount))
+                UsageDetails(usage: usage.displayUsage(dayCount: dayCount),
+                             historyStart: usage.daily.filter { !$0.isMissing }.map(\.date).min())
             } else {
                 placeholder
             }
@@ -72,6 +73,7 @@ struct UsageCard: View {
 
 private struct UsageDetails: View {
     let usage: TokenUsage
+    let historyStart: Date?
 
     private var provider: AIProvider { usage.provider }
     private var days: [DailyUsage] { usage.daily }
@@ -81,6 +83,26 @@ private struct UsageDetails: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             headline
+            if provider == .codex {
+                Text("Local history is backfilled and saved. Account totals are updated hourly. Local records may include other accounts used on this Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let historyStart {
+                    Text("Recorded history starts \(Format.date(historyStart))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if usage.hasIncompleteHistory {
+                Text("Some dates have no recorded data. Totals include recorded days only.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            if let notice = usage.historyNotice {
+                Text(L10n.message(notice))
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
             PricingStatusView(provider: provider)
             if usage.isPartialCostEstimate {
                 Text("Partial estimates include only priced local records. Some usage is missing model details or rates, so the full cost is unavailable.")
@@ -122,7 +144,7 @@ private struct UsageDetails: View {
 
     private var headline: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(Format.tokens(usage.totalTokens))
+            Text(usage.hasRecordedDays ? Format.tokens(usage.totalTokens) : "—")
                 .font(.system(.largeTitle, design: .rounded).weight(.bold))
                 .contentTransition(.numericText())
             Text("tokens")

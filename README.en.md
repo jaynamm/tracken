@@ -29,7 +29,7 @@ tracken is an **independently developed app**, not a built-in Claude or Codex fe
 | Feature | What it provides |
 | --- | --- |
 | Total dashboard | Combined tokens and estimated costs for today and the last 14 days, provider status, and stacked daily charts |
-| Codex details | Daily tokens for the last 14 days, local per-model usage and cost estimates, account plan, and usage limit |
+| Codex details | 14-day, 30-day, or all-history selection; historical backfill and persistent collection; daily/per-model tokens and cost estimates; account plan and limit |
 | Claude details | Last 14 days, last 30 days, or all local history; input, output, and cache tokens; daily and per-model cost estimates |
 | Menu bar | Each provider's 14-day tokens, today's tokens and estimated cost, combined tokens, and Codex/Claude subscription limits |
 | Limit display | Used percentages and reset times. The Codex menu supports both primary and secondary windows, including responses with only one window |
@@ -149,7 +149,7 @@ git pull --ff-only
 
 If local changes or a diverged branch prevent this command from succeeding, inspect your Git state while preserving your changes. After updating the source, repeat **Release build → quit the app → replace the app in `/Applications` → launch**.
 
-App data lives outside the app bundle, so replacing only the app preserves pricing caches and Claude limit files. If an update changes the status-line script itself, run its installer again. Reinstallation preserves the original status-line restoration information.
+App data lives outside the app bundle, so replacing only the app preserves saved Codex history, pricing caches, and Claude limit files. If an update changes the status-line script itself, run its installer again. Reinstallation preserves the original status-line restoration information.
 
 ```bash
 python3 Scripts/install-claude-statusline.py
@@ -167,7 +167,7 @@ python3 Scripts/install-claude-statusline.py
 
 tracken searches for the executable at `/opt/homebrew/bin/codex`, `/usr/local/bin/codex`, and then in the app process's `PATH`. A CLI available in your terminal may not be available in the environment inherited by an app launched from Finder.
 
-**Sign out** logs out the **shared Codex CLI account**, not just tracken. The app displays a confirmation dialog. After logout, Codex data is also removed from tracken.
+**Sign out** logs out the **shared Codex CLI account**, not just tracken. The app displays a confirmation dialog. After logout, Codex data is removed from the current display. Previously saved usage files remain and are reused when the same login reconnects.
 
 ### Load Claude local history
 
@@ -193,12 +193,23 @@ Open **Settings → Language** and select **한국어 (Korean)** or **English**.
 | View | Coverage |
 | --- | --- |
 | Total | Last 14 days, including today |
-| Codex details | Last 14 days, including today |
+| Codex details | Last 14 days, last 30 days, or all backfilled and subsequently collected history |
 | Claude details | Last 14 days, last 30 days, or all local history still present on this Mac |
-| Menu bar token totals | Always the last 14 days, independent of the Claude detail-page selection |
+| Menu bar token totals | Always the last 14 days, independent of the Codex/Claude detail-page selection |
 | Subscription limits | Windows supplied by the server or status line, independent of the dashboard range |
 
-Daily aggregation uses the Mac's current calendar and time zone. The 14-day and 30-day views fill dates without recorded usage with zero. **All local history** covers the remaining local files; it does not recover deleted history.
+Daily aggregation uses the Mac's current calendar and time zone. Codex shows uncollected dates as **No recorded data / —**; an explicit zero returned by the server remains zero. Totals include available records only. Claude continues to fill dates without local records with zero; its **All local history** view covers files currently present.
+
+### Codex backfill and all history
+
+On the Codex tab, select **Last 14 days**, **Last 30 days**, or **All history**. Token totals, costs, daily charts/lists, and model details follow that selection. Total and the menu bar continue to use the last 14 days.
+
+- On connection, the app imports past token metadata from `~/.codex/sessions` and `~/.codex/archived_sessions`. Resumed conversations are grouped by the dates when tokens were used.
+- At launch, hourly, and on manual refresh, it incorporates local records and server daily totals. Repeated responses are deduplicated; a server value replaces the previously saved value for the same date. Dates that roll out of the response window remain saved.
+- Already saved token metadata remains available if a source session disappears. Raw per-model token data allows historical costs to be recalculated when prices change.
+- Server totals are separated by a hash of the normalized login email. When no email is available, account totals are not saved under a shared identity. Workspaces under the same email are not separated. Local sessions are device-scoped and may include other accounts used on this Mac.
+- If account identity is available but the daily-total request fails, the app displays saved totals and local history with a notice. Subscription limits are never inferred from archived usage.
+- All history means **saved records from the earliest available date through today**. Files deleted before initial collection and uncollected dates cannot be recovered; gaps are not assumed to be zero.
 
 ### Total dashboard
 
@@ -314,7 +325,7 @@ To uninstall from that configuration, combine `--config-dir` with `--uninstall`.
 
 Costs are USD estimates that apply **the currently saved standard API rates** to the model and tokens recorded in each session. Today's value is recorded usage so far, not an end-of-day forecast.
 
-- Codex prioritizes account daily token totals and fills dates absent from the server using local records. Costs and per-model details come from the last 14 days of sessions on this Mac. Lifetime token increases are not arbitrarily assigned to today.
+- Codex prioritizes account daily token totals and fills dates absent from the server using local records. Costs and per-model details come from saved session metadata on this Mac within the selected range. Lifetime token increases are not arbitrarily assigned to today.
 - Claude uses ordinary input, cache reads, cache creation, and output. Displayed input totals include cache tokens, while costs apply the separate rate for each category. Cache writes distinguish 5-minute and 1-hour durations.
 - Codex applies long-context prices above 272K input tokens when the table provides them. It does not reproduce actual Fast or Batch billing rates.
 - Unsupported Claude pricing modes, unknown models, and some older models' requests above 200K input tokens remain unpriced. Records with US inference geography (`inference_geo=us`) use the implemented 1.1× multiplier.
@@ -374,7 +385,9 @@ These are not separate tracken services. The `tracken` label in Claude's status 
 
 | Path | Purpose |
 | --- | --- |
-| `~/.codex/sessions/**/*.jsonl` | Local Codex model/token history; uses `sessions` under `CODEX_HOME` when set |
+| `~/.codex/sessions/**/*.jsonl`, `~/.codex/archived_sessions/**/*.jsonl` | Current and archived Codex model/token history; uses these folders under `CODEX_HOME` when set |
+| `~/Library/Application Support/tracken/UsageHistory/codex-local.json` | Persistent token metadata snapshots; source paths and response identifiers are hashed |
+| `codex-account-hash.json` in that folder | Server daily totals separated by login email hash, with the latest received value per date |
 | `~/.claude/projects/**/*.jsonl` | Claude Code history; uses `projects` under `CLAUDE_CONFIG_DIR` when set |
 | `~/.claude/settings.json` | The installer manages the `statusLine` setting here |
 | `~/Library/Application Support/tracken/Claude/claude-statusline.py` | Installed status-line bridge |
@@ -394,7 +407,7 @@ There is no GUI folder picker for source history. Apply environment variables wh
 - Aggregators decode required metadata such as dates, models, tokens, and IDs used for deduplication. They do not send local conversation contents externally or create new model requests to retrieve history.
 - The CLI manages Codex authentication. Claude history and the bridge require no API key. If a previous status-line command exists, forwarding the original JSON to it remains part of the bridge behavior.
 - The bridge's limit cache stores no prompts, project paths, session IDs, or credentials. Settings backups are copies of the original settings file and are separate from the limit cache.
-- tracken does not replicate usage history into a separate persistent database. Pricing and limit caches remain on disk; provider token history is reread from its original source.
+- Codex dates, models, raw token metadata, and account daily totals are retained in local JSON files. Conversation contents and credentials are not saved. Claude token history continues to be reread from its original source. An unreadable archive produces an error without overwriting the existing file.
 
 There is currently no project-by-project or multi-account dashboard, CSV export, automatic quota reset, app binary auto-updater, or UI for enabling launch at login.
 
@@ -409,7 +422,9 @@ There is currently no project-by-project or multi-account dashboard, CSV export,
 | Claude tokens appear but limits do not | These use separate paths. Install the bridge, receive a Pro/Max response in terminal `claude`, then refresh tracken. |
 | VS Code Claude chat has no limit updates | The chat panel may not run the terminal status line. Try `claude` in VS Code's integrated terminal. |
 | No Claude local history | Check the `projects` JSONL files and read permissions. For a custom config directory, pass `CLAUDE_CONFIG_DIR` to the app as well. |
-| Today is zero but older usage exists | This can be correct. Past records are not moved into today. Select a wider Claude history range. |
+| Today is zero or missing but older usage exists | Past records are not moved into today. Select a wider Codex or Claude range. Codex distinguishes missing data from zero. |
+| Dates are missing even in Codex All history | Only available local records and collected server totals are shown. Files deleted before collection and long collection gaps cannot be recovered. |
+| Saved Codex history could not be read | The existing `UsageHistory` file is preserved. Back it up and check file permissions and JSON integrity. |
 | Window ended; awaiting update | A new sample is required. Refetch Codex, or obtain a Claude terminal response to update its cache before refreshing tracken. |
 | Model prices remain old after refresh | Normal usage refresh does not force a price download. Use the provider's **Update prices now** button. |
 | Pricing error or an unlisted model | Saved prices are retained. Update the app and retry the official price download; unsupported formats/models remain unpriced. |
@@ -453,7 +468,7 @@ Run from the repository root. Tests use temporary files and response fixtures wi
 ./Scripts/test-usage.sh
 ```
 
-Coverage includes calendar/time-zone aggregation, deduplication, resumed sessions, partial costs, both Codex windows and weekly-only responses, Claude bridge installation/restoration, hourly scheduling, pricing caches and offline fallback, repricing, official Claude HTML footnotes and 19 models, and Korean/English strings.
+Coverage includes calendar/time-zone aggregation, deduplication, resumed sessions, partial costs, both Codex windows and weekly-only responses, Claude bridge installation/restoration, hourly scheduling, pricing caches and offline fallback, repricing, official Claude HTML footnotes and 19 models, Codex historical backfill/restart persistence/date corrections/account isolation/period selection/missing dates, and Korean/English strings.
 
 The earlier build command also verifies a local Release build. `DerivedData/` is excluded from Git.
 

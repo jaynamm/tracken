@@ -82,6 +82,11 @@ struct TotalUsageView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            if total.hasIncompleteHistory {
+                Text("Some dates have no recorded data. Totals include recorded days only.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
         }
     }
 
@@ -91,7 +96,7 @@ struct TotalUsageView: View {
             HStack(spacing: 12) {
                 DashboardSummaryTile(
                     title: "Last 14 days · tokens",
-                    value: total.hasUsageData ? Format.tokens(total.totalTokens) : "—",
+                    value: total.hasRecordedDays ? Format.tokens(total.totalTokens) : "—",
                     systemImage: "number"
                 )
                 DashboardSummaryTile(
@@ -103,7 +108,7 @@ struct TotalUsageView: View {
             HStack(spacing: 12) {
                 DashboardSummaryTile(
                     title: "Today’s tokens",
-                    value: today.map { Format.tokens($0.totalTokens) } ?? "—",
+                    value: today.flatMap { $0.isMissing ? nil : Format.tokens($0.totalTokens) } ?? "—",
                     systemImage: "sun.max"
                 )
                 DashboardSummaryTile(
@@ -141,9 +146,9 @@ private struct TotalProviderCard: View {
 
             if let usage = state.usage?.displayUsage(dayCount: 14) {
                 HStack(alignment: .top, spacing: 16) {
-                    metric("Last 14 days", tokens: usage.totalTokens, cost: usage)
+                    metric("Last 14 days", tokens: usage.hasRecordedDays ? usage.totalTokens : nil, cost: usage)
                     if let today = usage.daily.first {
-                        metric("Today", tokens: today.totalTokens, cost: today)
+                        metric("Today", tokens: today.isMissing ? nil : today.totalTokens, cost: today)
                     }
                 }
                 if let limit = usage.rateLimit {
@@ -179,12 +184,12 @@ private struct TotalProviderCard: View {
         }
     }
 
-    private func metric(_ title: String, tokens: Int, cost: some CostEstimating) -> some View {
+    private func metric(_ title: String, tokens: Int?, cost: some CostEstimating) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(L10n.text(title))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text("\(Format.tokens(tokens)) tokens")
+            Text("\(tokens.map { Format.tokens($0) } ?? "—") tokens")
                 .font(.callout.weight(.semibold))
             Text(cost.knownEstimatedCostUSD.map {
                 L10n.format(cost.isPartialCostEstimate ? "≈ %@ · partial estimate" : "≈ %@ · API estimate", Format.cost($0))

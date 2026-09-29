@@ -16,9 +16,11 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var selectedPage: DashboardPage = .total
     @State private var claudeHistoryDays = 14
+    @State private var codexHistoryDays = 14
 
     private func dayCount(for provider: AIProvider) -> Int? {
-        provider == .anthropic ? (claudeHistoryDays == 0 ? nil : claudeHistoryDays) : 14
+        let days = provider == .anthropic ? claudeHistoryDays : codexHistoryDays
+        return days == 0 ? nil : days
     }
 
     var body: some View {
@@ -35,14 +37,12 @@ struct ContentView: View {
                             selectedPage = .provider($0)
                         }
                     case .provider(let provider):
-                        if provider == .anthropic {
-                            Picker("History period", selection: $claudeHistoryDays) {
-                                Text("Last 14 days").tag(14)
-                                Text("Last 30 days").tag(30)
-                                Text("All local history").tag(0)
-                            }
-                            .pickerStyle(.segmented)
+                        Picker("History period", selection: provider == .codex ? $codexHistoryDays : $claudeHistoryDays) {
+                            Text("Last 14 days").tag(14)
+                            Text("Last 30 days").tag(30)
+                            Text(L10n.text(provider == .codex ? "All history" : "All local history")).tag(0)
                         }
+                        .pickerStyle(.segmented)
                         summary(for: provider)
                         todaySummary(for: provider)
                         UsageCard(provider: provider, dayCount: dayCount(for: provider))
@@ -122,8 +122,9 @@ struct ContentView: View {
 
         return HStack(spacing: 12) {
             DashboardSummaryTile(
-                title: dayCount.map { L10n.format("Last %lld days", $0) } ?? "All local history",
-                value: usage.map { Format.tokens($0.totalTokens) } ?? "—",
+                title: dayCount.map { L10n.format("Last %lld days", $0) }
+                    ?? (provider == .codex ? "All history" : "All local history"),
+                value: usage.flatMap { $0.hasRecordedDays ? Format.tokens($0.totalTokens) : nil } ?? "—",
                 systemImage: "number"
             )
             DashboardSummaryTile(
@@ -139,7 +140,7 @@ struct ContentView: View {
         return HStack(spacing: 12) {
             DashboardSummaryTile(
                 title: "Today’s tokens",
-                value: today.map { Format.tokens($0.totalTokens) } ?? "—",
+                value: today.flatMap { $0.isMissing ? nil : Format.tokens($0.totalTokens) } ?? "—",
                 systemImage: "sun.max"
             )
             DashboardSummaryTile(

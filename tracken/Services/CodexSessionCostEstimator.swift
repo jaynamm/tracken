@@ -3,17 +3,18 @@
 //  tracken
 //
 //  Estimates API-equivalent cost from token metadata in local Codex sessions.
-//  Only timestamp, model, turn ID, and token-count fields are decoded.
+//  Only timestamps, model, token counts, and deduplication IDs are decoded.
 //
 
 import Foundation
 
 nonisolated protocol CodexSessionCostEstimating: Sendable {
-    func estimateRecentUsage(dayCount: Int, now: Date) async -> [Date: [ModelUsage]]
+    func estimateRecentUsage(dayCount: Int?, now: Date) async throws -> [Date: [ModelUsage]]
 }
 
 nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendable {
-    private let sessionsURL: URL
+    private let sessionDirectories: [URL]
+    private let archive: CodexLocalUsageArchive?
     private let pricingCatalog: PricingCatalog?
 
     init() {
@@ -21,61 +22,62 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
         let environment = ProcessInfo.processInfo.environment
         let codexHome = environment["CODEX_HOME"].map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
-        sessionsURL = codexHome.appendingPathComponent("sessions", isDirectory: true)
+        sessionDirectories = ["sessions", "archived_sessions"].map { codexHome.appendingPathComponent($0, isDirectory: true) }
+        archive = CodexLocalUsageArchive()
     }
 
-    init(sessionsURL: URL, pricingCatalog: PricingCatalog? = nil) {
-        self.sessionsURL = sessionsURL
+    init(sessionsURL: URL, pricingCatalog: PricingCatalog? = nil, archiveURL: URL? = nil) {
+        sessionDirectories = [sessionsURL]
         self.pricingCatalog = pricingCatalog
+        archive = archiveURL.map { CodexLocalUsageArchive(url: $0) }
     }
 
-    func estimateRecentUsage(dayCount: Int, now: Date = Date()) async -> [Date: [ModelUsage]] {
-        guard dayCount > 0 else { return [:] }
-        let sessionsURL = sessionsURL
+    func estimateRecentUsage(dayCount: Int?, now: Date = Date()) async throws -> [Date: [ModelUsage]] {
+        if let dayCount, dayCount <= 0 { return [:] }
+        let directories = sessionDirectories
         let prices = await pricingCatalog?.snapshot(for: .codex) ?? .bundled(for: .codex)
+        let scanned = await Task.detached(priority: .utility) { Self.scan(directories) }.value
+        let records: [CodexArchivedTokenRecord]
+        if let archive {
+            records = try await archive.merge(scanned)
+        } else {
+            records = CodexLocalUsageArchive.uniqueRecords(in: scanned)
+        }
         return await Task.detached(priority: .utility) {
-            Self.loadUsage(from: sessionsURL, dayCount: dayCount, now: now, prices: prices)
+            Self.aggregate(records, dayCount: dayCount, now: now, prices: prices)
         }.value
     }
 
-    private static func loadUsage(
-        from sessionsURL: URL,
-        dayCount: Int,
-        now: Date,
-        prices: PricingSnapshot
-    ) -> [Date: [ModelUsage]] {
+    private static func scan(_ directories: [URL]) -> [String: [CodexArchivedTokenRecord]] {
+        var snapshots: [String: [CodexArchivedTokenRecord]] = [:]
+        let decoder = JSONDecoder()
+        for directory in directories {
+            guard let files = FileManager.default.enumerator(at: directory,
+                includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { continue }
+            for case let file as URL in files where file.pathExtension == "jsonl" {
+                // Files with usage replace their prior snapshot. Missing,
+                // unreadable, or temporarily empty files retain saved records.
+                if let records = loadSession(at: file, decoder: decoder) {
+                    snapshots[CodexHistoryKey.hash(file.standardizedFileURL.path)] = records
+                }
+            }
+        }
+        return snapshots
+    }
+
+    private static func aggregate(_ records: [CodexArchivedTokenRecord], dayCount: Int?, now: Date,
+                                  prices: PricingSnapshot) -> [Date: [ModelUsage]] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
-        guard let cutoff = calendar.date(byAdding: .day, value: -(dayCount - 1), to: today) else {
-            return [:]
-        }
-
+        let cutoff = dayCount.flatMap { calendar.date(byAdding: .day, value: -($0 - 1), to: today) }
+            ?? Date.distantPast
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? now
         var accumulators: [Date: [String: UsageAccumulator]] = [:]
-        let decoder = JSONDecoder()
-        let timestampFormatter = ISO8601DateFormatter()
-        timestampFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        // A resumed task keeps its original directory. Filter by record time,
-        // not the date in the path, so recent work in old tasks is included.
-        var seenResponseIDs: Set<String> = []
-        if let files = FileManager.default.enumerator(
-            at: sessionsURL,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) {
-            for case let fileURL as URL in files where fileURL.pathExtension == "jsonl" {
-                loadSession(
-                    at: fileURL,
-                    prices: prices,
-                    cutoff: cutoff,
-                    tomorrow: calendar.date(byAdding: .day, value: 1, to: today) ?? now,
-                    calendar: calendar,
-                    decoder: decoder,
-                    timestampFormatter: timestampFormatter,
-                    seenResponseIDs: &seenResponseIDs,
-                    into: &accumulators
-                )
-            }
+        for record in records where record.timestamp >= cutoff && record.timestamp < tomorrow {
+            let date = calendar.startOfDay(for: record.timestamp)
+            var accumulator = accumulators[date]?[record.model] ?? UsageAccumulator()
+            accumulator.add(record.usage, price: prices.rate(for: record.model))
+            accumulators[date, default: [:]][record.model] = accumulator
         }
 
         return accumulators.mapValues { models in
@@ -103,19 +105,12 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
         }
     }
 
-    private static func loadSession(
-        at fileURL: URL,
-        prices: PricingSnapshot,
-        cutoff: Date,
-        tomorrow: Date,
-        calendar: Calendar,
-        decoder: JSONDecoder,
-        timestampFormatter: ISO8601DateFormatter,
-        seenResponseIDs: inout Set<String>,
-        into accumulators: inout [Date: [String: UsageAccumulator]]
-    ) {
-        guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return }
-
+    private static func loadSession(at fileURL: URL, decoder: JSONDecoder) -> [CodexArchivedTokenRecord]? {
+        guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
+        let timestampFormatter = ISO8601DateFormatter()
+        timestampFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var sessionID = fileURL.lastPathComponent
+        var saved: [CodexArchivedTokenRecord] = []
         var modelByTurnID: [String: String] = [:]
         var currentModel: String?
         var records: [PendingUsageRecord] = []
@@ -128,6 +123,8 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
             }
 
             switch entry.type {
+            case "session_meta":
+                sessionID = entry.payload.id ?? sessionID
             case "turn_context":
                 guard let model = entry.payload.model, !model.isEmpty else { continue }
                 currentModel = model
@@ -179,24 +176,17 @@ nonisolated struct CodexSessionCostEstimator: CodexSessionCostEstimating, Sendab
             guard let date = parseTimestamp(record.timestamp) else { return false }
             return date < firstModernDate
         }
-        for record in earlierLegacyRecords + records {
-            guard
-                let timestamp = parseTimestamp(record.timestamp),
-                timestamp >= cutoff,
-                timestamp < tomorrow
-            else { continue }
-            guard record.usage.effectiveTotalTokens > 0 else { continue }
-            if let responseID = record.responseID, !responseID.isEmpty,
-               !seenResponseIDs.insert(responseID).inserted { continue }
-
+        for (index, record) in (earlierLegacyRecords + records).enumerated() {
+            guard let timestamp = parseTimestamp(record.timestamp),
+                  record.usage.effectiveTotalTokens > 0 else { continue }
             let model = record.turnID.flatMap { modelByTurnID[$0] }
-                ?? record.fallbackModel
-                ?? "Unknown Codex model"
-            let date = calendar.startOfDay(for: timestamp)
-            var accumulator = accumulators[date]?[model] ?? UsageAccumulator()
-            accumulator.add(record.usage, price: prices.rate(for: model))
-            accumulators[date, default: [:]][model] = accumulator
+                ?? record.fallbackModel ?? "Unknown Codex model"
+            let identity = record.responseID.flatMap { $0.isEmpty ? nil : "response:" + $0 }
+                ?? "legacy:\(sessionID):\(index):\(record.timestamp)"
+            saved.append(CodexArchivedTokenRecord(id: CodexHistoryKey.hash(identity),
+                                                 timestamp: timestamp, model: model, usage: record.usage))
         }
+        return saved
 
         func parseTimestamp(_ value: String) -> Date? {
             if let date = timestampFormatter.date(from: value) { return date }
@@ -213,6 +203,7 @@ nonisolated private struct SessionEntry: Decodable {
     let payload: Payload
 
     struct Payload: Decodable {
+        let id: String?
         let turnID: String?
         let responseID: String?
         let model: String?
@@ -221,6 +212,7 @@ nonisolated private struct SessionEntry: Decodable {
         let info: TokenCountInfo?
 
         enum CodingKeys: String, CodingKey {
+            case id
             case turnID = "turn_id"
             case responseID = "response_id"
             case model
@@ -231,7 +223,7 @@ nonisolated private struct SessionEntry: Decodable {
     }
 }
 
-nonisolated private struct SessionTokenUsage: Decodable, Equatable {
+nonisolated struct SessionTokenUsage: Codable, Equatable, Sendable {
     let inputTokens: Int
     let cachedInputTokens: Int
     let cacheWriteInputTokens: Int

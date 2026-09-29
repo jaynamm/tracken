@@ -304,6 +304,38 @@
         }
       }
     },
+    "Account daily totals could not be refreshed. Showing saved totals and local history.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account daily totals could not be refreshed. Showing saved totals and local history."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계정의 일별 합계를 갱신하지 못했습니다. 저장된 합계와 로컬 기록을 표시합니다."
+          }
+        }
+      }
+    },
+    "All history": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All history"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 기간"
+          }
+        }
+      }
+    },
     "All local history": {
       "extractionState": "manual",
       "localizations": {
@@ -1459,6 +1491,22 @@
         }
       }
     },
+    "Local history is backfilled and saved. Account totals are updated hourly. Local records may include other accounts used on this Mac.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local history is backfilled and saved. Account totals are updated hourly. Local records may include other accounts used on this Mac."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "과거 로컬 기록을 불러와 저장하고 계정 합계를 매시간 갱신합니다. 로컬 기록에는 이 Mac에서 사용한 다른 계정의 내역이 포함될 수 있습니다."
+          }
+        }
+      }
+    },
     "Long cache read %@ · Write %@": {
       "extractionState": "manual",
       "localizations": {
@@ -1608,6 +1656,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "모델별 사용량이 없습니다."
+          }
+        }
+      }
+    },
+    "No recorded data": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recorded data"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록 없음"
           }
         }
       }
@@ -1952,6 +2016,22 @@
         }
       }
     },
+    "Recorded history starts %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded history starts %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기록 시작일 %@"
+          }
+        }
+      }
+    },
     "Refresh usage": {
       "extractionState": "manual",
       "localizations": {
@@ -2088,6 +2168,22 @@
         }
       }
     },
+    "Saved Codex history could not be read. The existing file has been kept.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved Codex history could not be read. The existing file has been kept."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 Codex 기록을 읽지 못했습니다. 기존 파일은 보존했습니다."
+          }
+        }
+      }
+    },
     "Saved key removed": {
       "extractionState": "manual",
       "localizations": {
@@ -2186,6 +2282,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "공유 중인 Codex CLI 계정에서 로그아웃할까요?"
+          }
+        }
+      }
+    },
+    "Some dates have no recorded data. Totals include recorded days only.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some dates have no recorded data. Totals include recorded days only."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일부 날짜에는 기록이 없습니다. 합계는 기록이 있는 날짜만 포함합니다."
           }
         }
       }

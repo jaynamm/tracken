@@ -63,6 +63,7 @@ nonisolated struct DailyUsage: Identifiable, Equatable, Sendable, CostEstimating
     let estimatedCostUSD: Double?
     let knownEstimatedCostUSD: Double?
     let modelUsage: [ModelUsage]
+    let isMissing: Bool
 
     var id: Date { date }
     var hasDetailedBreakdown: Bool { inputTokens != nil && outputTokens != nil }
@@ -83,6 +84,7 @@ nonisolated struct DailyUsage: Identifiable, Equatable, Sendable, CostEstimating
         self.knownEstimatedCostUSD = estimatedCostUSD ?? knownEstimatedCostUSD
             ?? sumKnownCosts(modelUsage.map(\.knownEstimatedCostUSD))
         self.modelUsage = modelUsage
+        isMissing = false
     }
 
     init(
@@ -90,7 +92,8 @@ nonisolated struct DailyUsage: Identifiable, Equatable, Sendable, CostEstimating
         totalTokens: Int,
         estimatedCostUSD: Double? = nil,
         knownEstimatedCostUSD: Double? = nil,
-        modelUsage: [ModelUsage] = []
+        modelUsage: [ModelUsage] = [],
+        isMissing: Bool = false
     ) {
         self.date = date
         inputTokens = nil
@@ -100,6 +103,7 @@ nonisolated struct DailyUsage: Identifiable, Equatable, Sendable, CostEstimating
         self.knownEstimatedCostUSD = estimatedCostUSD ?? knownEstimatedCostUSD
             ?? sumKnownCosts(modelUsage.map(\.knownEstimatedCostUSD))
         self.modelUsage = modelUsage
+        self.isMissing = isMissing
     }
 }
 
@@ -179,6 +183,11 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
     let lifetimeTokens: Int?
     let rateLimit: CodexRateLimit?
     let secondaryRateLimit: CodexRateLimit?
+    let fillsMissingDaysWithZero: Bool
+    let historyNotice: String?
+
+    var hasIncompleteHistory: Bool { daily.contains(where: \.isMissing) }
+    var hasRecordedDays: Bool { daily.contains { !$0.isMissing } }
 
     var rateLimits: [CodexRateLimit] { [rateLimit, secondaryRateLimit].compactMap { $0 } }
 
@@ -196,7 +205,9 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
         account: ProviderAccount? = nil,
         lifetimeTokens: Int? = nil,
         rateLimit: CodexRateLimit? = nil,
-        secondaryRateLimit: CodexRateLimit? = nil
+        secondaryRateLimit: CodexRateLimit? = nil,
+        fillsMissingDaysWithZero: Bool = true,
+        historyNotice: String? = nil
     ) {
         self.provider = provider
         self.daily = daily
@@ -213,6 +224,8 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
         self.lifetimeTokens = lifetimeTokens
         self.rateLimit = rateLimit
         self.secondaryRateLimit = secondaryRateLimit
+        self.fillsMissingDaysWithZero = fillsMissingDaysWithZero
+        self.historyNotice = historyNotice
     }
 
     /// Returns a complete, newest-first calendar window and fills missing dates.
@@ -232,6 +245,9 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
             }
 
             let entries = usageByDay[date] ?? []
+            if !fillsMissingDaysWithZero && (entries.isEmpty || entries.allSatisfy(\.isMissing)) {
+                return DailyUsage(date: date, totalTokens: 0, isMissing: true)
+            }
             let estimatedCost = Self.completeDailyEstimatedCost(for: entries)
             let knownCost = sumKnownCosts(entries.filter {
                 $0.totalTokens > 0 || !$0.modelUsage.isEmpty || ($0.knownEstimatedCostUSD ?? 0) > 0
@@ -290,7 +306,14 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
     }
 
     func displayUsage(dayCount: Int?, now: Date = Date()) -> TokenUsage {
-        let days = dayCount.map { recentDays(count: $0, now: now) }
+        var count = dayCount
+        if count == nil, !fillsMissingDaysWithZero, let firstDate = daily.map(\.date).min() {
+            let calendar = Calendar.current
+            let elapsedDays = calendar.dateComponents([.day], from: calendar.startOfDay(for: firstDate),
+                                                       to: calendar.startOfDay(for: now)).day ?? 0
+            count = max(1, elapsedDays + 1)
+        }
+        let days = count.map { recentDays(count: $0, now: now) }
             ?? daily.sorted { $0.date > $1.date }
         let models = Self.aggregateModelUsage(days.flatMap(\.modelUsage))
         return TokenUsage(provider: provider, daily: days, modelUsage: models,
@@ -298,15 +321,16 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
                           estimatedCostUSD: Self.completeDailyEstimatedCost(for: days),
                           updatedAt: updatedAt, account: account,
                           lifetimeTokens: lifetimeTokens, rateLimit: rateLimit,
-                          secondaryRateLimit: secondaryRateLimit)
+                          secondaryRateLimit: secondaryRateLimit,
+                          fillsMissingDaysWithZero: fillsMissingDaysWithZero, historyNotice: historyNotice)
     }
 
     var last14Days: [DailyUsage] { recentDays(count: 14) }
 
-    /// Empty dates cost zero; a date with unpriced usage makes the sum unavailable.
+    /// Measured zero days cost zero; missing or unpriced days leave the sum unknown.
     nonisolated static func completeDailyEstimatedCost(for days: [DailyUsage]) -> Double? {
         guard !days.contains(where: {
-            ($0.totalTokens > 0 || !$0.modelUsage.isEmpty) && $0.estimatedCostUSD == nil
+            $0.isMissing || (($0.totalTokens > 0 || !$0.modelUsage.isEmpty) && $0.estimatedCostUSD == nil)
         }) else {
             return nil
         }
@@ -334,6 +358,8 @@ nonisolated struct TotalUsage: Sendable, CostEstimating {
 
     var totalTokens: Int { daily.reduce(0) { $0 + $1.totalTokens } }
     var hasUsageData: Bool { providerCount > 0 }
+    var hasRecordedDays: Bool { daily.contains { !$0.isMissing } }
+    var hasIncompleteHistory: Bool { dailyByProvider.values.contains { $0.contains(where: \.isMissing) } }
 
     init(usages: [TokenUsage], dayCount: Int = 14, now: Date = Date(), calendar: Calendar = .current) {
         providerCount = usages.count
@@ -351,7 +377,8 @@ nonisolated struct TotalUsage: Sendable, CostEstimating {
                 date: date,
                 totalTokens: entries.reduce(0) { $0 + $1.totalTokens },
                 estimatedCostUSD: TokenUsage.completeDailyEstimatedCost(for: entries),
-                knownEstimatedCostUSD: sumKnownCosts(active.map(\.knownEstimatedCostUSD))
+                knownEstimatedCostUSD: sumKnownCosts(active.map(\.knownEstimatedCostUSD)),
+                isMissing: entries.allSatisfy(\.isMissing)
             )
         }.sorted { $0.date > $1.date }
         estimatedCostUSD = usages.isEmpty ? nil : TokenUsage.completeDailyEstimatedCost(for: sourceDays)

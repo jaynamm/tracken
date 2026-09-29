@@ -117,7 +117,7 @@ private actor PricingHTTPFixture {
         {"type":"token_usage_record","timestamp":"\(stamp)","payload":{"turn_id":"pricing-test","response_id":"one","usage":{"input_tokens":100000,"output_tokens":0}}}
         """
         try lines.write(to: session.appendingPathComponent("sample.jsonl"), atomically: true, encoding: .utf8)
-        let usage = await CodexSessionCostEstimator(sessionsURL: session, pricingCatalog: catalog)
+        let usage = try await CodexSessionCostEstimator(sessionsURL: session, pricingCatalog: catalog)
             .estimateRecentUsage(dayCount: 1, now: now)
         try checkPrice(abs((usage.values.first?.first?.estimatedCostUSD ?? -1) - 0.8) < 1e-10,
                        "Codex estimator consumes refreshed catalog")
