@@ -14,6 +14,19 @@ nonisolated enum MenuBarDisplayStyle: String, CaseIterable, Identifiable {
     }
 }
 
+nonisolated enum MenuBarGaugeLayout: String, CaseIterable, Identifiable {
+    case vertical, horizontal
+
+    var id: Self { self }
+
+    var titleKey: String {
+        switch self {
+        case .vertical: "Vertical"
+        case .horizontal: "Horizontal"
+        }
+    }
+}
+
 /// Subscription quota only: token totals are not a percentage of a plan's limit.
 nonisolated struct MenuBarUsageGauge: Equatable, Sendable {
     let provider: AIProvider

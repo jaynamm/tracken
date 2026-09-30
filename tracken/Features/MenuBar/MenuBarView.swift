@@ -8,6 +8,7 @@ import SwiftUI
 struct MenuBarView: View {
     @Environment(UsageStore.self) private var store
     @Environment(\.openWindow) private var openWindow
+    @State private var showingSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -22,6 +23,8 @@ struct MenuBarView: View {
             CodexLimitsView()
             ClaudeLimitsView(compact: true)
 
+            CompactRefreshStatus()
+
             if !store.connectedProviders.isEmpty {
                 combinedUsage
             }
@@ -32,6 +35,10 @@ struct MenuBarView: View {
         .padding(14)
         .frame(width: 360)
         .environment(\.locale, AppSettings.shared.language.locale)
+        .task { await store.menuDidOpen() }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView().environment(store)
+        }
     }
 
     private var header: some View {
@@ -39,7 +46,8 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Usage overview")
                     .font(.headline)
-                Text("Last 14 days · hourly refresh")
+                Text(L10n.text(AppSettings.shared.adaptiveRefreshEnabled
+                              ? "Last 14 days · adaptive refresh" : "Last 14 days · hourly refresh"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -50,7 +58,7 @@ struct MenuBarView: View {
                 Image(systemName: "arrow.clockwise")
             }
             .buttonStyle(.borderless)
-            .disabled(store.isRefreshing)
+            .disabled(store.isRefreshing || store.isRefreshingLimits)
         }
     }
 
@@ -77,6 +85,7 @@ struct MenuBarView: View {
                 NSApp.activate(ignoringOtherApps: true)
             }
             Spacer()
+            Button("Settings") { showingSettings = true }
             Button("Quit") {
                 NSApp.terminate(nil)
             }

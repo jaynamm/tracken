@@ -35,6 +35,40 @@
         }
       }
     },
+    "%@ limit recovered": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ limit recovered"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 한도 회복"
+          }
+        }
+      }
+    },
+    "%@ limit: %@ used.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ limit: %@ used."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 한도: %@ 사용."
+          }
+        }
+      }
+    },
     "%@ tokens": {
       "extractionState": "manual",
       "localizations": {
@@ -65,6 +99,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "최근 14일 동안 %@ 토큰 사용"
+          }
+        }
+      }
+    },
+    "%@ usage limit warning": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ usage limit warning"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 사용 한도 경고"
           }
         }
       }
@@ -338,6 +389,23 @@
         }
       }
     },
+    "Account changed. Waiting for fresh limits.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account changed. Waiting for fresh limits."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계정이 변경되었습니다. 새 한도 정보를 기다리고 있습니다."
+          }
+        }
+      }
+    },
     "Account daily totals could not be refreshed. Showing saved totals and local history.": {
       "localizations": {
         "en": {
@@ -350,6 +418,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "계정의 일별 합계를 갱신하지 못했습니다. 저장된 합계와 로컬 기록을 표시합니다."
+          }
+        }
+      }
+    },
+    "Adaptive refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adaptive refresh"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "활동에 따른 자동 갱신"
           }
         }
       }
@@ -370,6 +455,40 @@
         }
       }
     },
+    "All history estimated cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All history estimated cost"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 기간 예상 비용"
+          }
+        }
+      }
+    },
+    "All history partial estimated cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All history partial estimated cost"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 기간 예상 비용 (부분)"
+          }
+        }
+      }
+    },
     "All local history": {
       "extractionState": "manual",
       "localizations": {
@@ -383,6 +502,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "전체 로컬 기록"
+          }
+        }
+      }
+    },
+    "Allow tracken in System Settings → Notifications, then enable notifications here.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow tracken in System Settings → Notifications, then enable notifications here."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시스템 설정 → 알림에서 tracken을 허용한 뒤 여기서 알림을 켜주세요."
           }
         }
       }
@@ -557,6 +693,23 @@
         }
       }
     },
+    "Check now": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check now"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 확인"
+          }
+        }
+      }
+    },
     "Checks official prices daily while tracken is running. Saved prices work offline. Past usage is recalculated at the latest saved rates; these are not historical bills.": {
       "extractionState": "manual",
       "localizations": {
@@ -608,6 +761,23 @@
         }
       }
     },
+    "Claude limits require the terminal status-line bridge. Local token history alone does not provide limits.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude limits require the terminal status-line bridge. Local token history alone does not provide limits."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude 한도에는 터미널 상태줄 브리지가 필요합니다. 로컬 토큰 기록만으로는 한도가 제공되지 않습니다."
+          }
+        }
+      }
+    },
     "Claude subscription limits": {
       "extractionState": "manual",
       "localizations": {
@@ -642,6 +812,23 @@
         }
       }
     },
+    "Codex & Claude · usage monitor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex & Claude · usage monitor"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex & Claude · 사용량 모니터"
+          }
+        }
+      }
+    },
     "Codex CLI was not found. Install it, then try again.": {
       "extractionState": "manual",
       "localizations": {
@@ -672,6 +859,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Codex가 유효한 로그인 URL을 반환하지 않았습니다."
+          }
+        }
+      }
+    },
+    "Codex returned invalid subscription limits.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex returned invalid subscription limits."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex가 올바르지 않은 구독 한도 정보를 반환했습니다."
           }
         }
       }
@@ -828,6 +1032,23 @@
         }
       }
     },
+    "Connected account": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected account"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 계정"
+          }
+        }
+      }
+    },
     "Connecting…": {
       "extractionState": "manual",
       "localizations": {
@@ -841,6 +1062,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "연결 중…"
+          }
+        }
+      }
+    },
+    "Connection status": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection status"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 상태"
           }
         }
       }
@@ -1032,6 +1270,23 @@
         }
       }
     },
+    "Data sources": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data sources"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데이터 위치"
+          }
+        }
+      }
+    },
     "Day": {
       "extractionState": "manual",
       "localizations": {
@@ -1100,6 +1355,23 @@
         }
       }
     },
+    "Detected in the last 5 minutes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detected in the last 5 minutes"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 5분 내 활동 감지"
+          }
+        }
+      }
+    },
     "Display language": {
       "extractionState": "manual",
       "localizations": {
@@ -1130,6 +1402,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "완료"
+          }
+        }
+      }
+    },
+    "Enable limit notifications": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable limit notifications"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한도 알림 켜기"
           }
         }
       }
@@ -1219,6 +1508,23 @@
         }
       }
     },
+    "Gauge layout": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gauge layout"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게이지 배치"
+          }
+        }
+      }
+    },
     "Gauges and percentages": {
       "extractionState": "manual",
       "localizations": {
@@ -1253,6 +1559,23 @@
         }
       }
     },
+    "Gauges show the percentage used. Missing or expired limits appear as —. Refresh frequency is managed in Connection status.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gauges show the percentage used. Missing or expired limits appear as —. Refresh frequency is managed in Connection status."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "게이지는 사용률을 표시합니다. 수신되지 않았거나 만료된 한도는 —로 표시합니다. 갱신 주기는 연결 상태에서 관리합니다."
+          }
+        }
+      }
+    },
     "History period": {
       "extractionState": "manual",
       "localizations": {
@@ -1266,6 +1589,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "조회 기간"
+          }
+        }
+      }
+    },
+    "Horizontal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가로"
           }
         }
       }
@@ -1406,6 +1746,40 @@
         }
       }
     },
+    "Last %lld days estimated cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last %lld days estimated cost"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 %lld일 예상 비용"
+          }
+        }
+      }
+    },
+    "Last %lld days partial estimated cost": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last %lld days partial estimated cost"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 %lld일 예상 비용 (부분)"
+          }
+        }
+      }
+    },
     "Last 14 days": {
       "extractionState": "manual",
       "localizations": {
@@ -1419,6 +1793,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "최근 14일"
+          }
+        }
+      }
+    },
+    "Last 14 days · adaptive refresh": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 14 days · adaptive refresh"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 14일 · 활동에 따른 갱신"
           }
         }
       }
@@ -1474,6 +1865,23 @@
         }
       }
     },
+    "Last checked %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last checked %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마지막 확인 %@"
+          }
+        }
+      }
+    },
     "Lighter bars are partial estimates for priced records only.": {
       "extractionState": "manual",
       "localizations": {
@@ -1504,6 +1912,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "연한 구간은 비용을 계산할 수 있는 기록만 포함한 부분 추정치입니다."
+          }
+        }
+      }
+    },
+    "Limit refresh failed · see Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limit refresh failed · see Settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한도 갱신 실패 · 설정에서 확인"
           }
         }
       }
@@ -1660,6 +2085,40 @@
         }
       }
     },
+    "Monitors usage even with the window closed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monitors usage even with the window closed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "창을 닫아도 사용량을 확인합니다"
+          }
+        }
+      }
+    },
+    "New data confirms the %@ limit is below 100%% again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New data confirms the %@ limit is below 100%% again."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 데이터에서 %@ 한도가 다시 100%% 미만으로 확인되었습니다."
+          }
+        }
+      }
+    },
     "Newest first": {
       "extractionState": "manual",
       "localizations": {
@@ -1673,6 +2132,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "최신순"
+          }
+        }
+      }
+    },
+    "No current Codex limits. Check your CLI login and use Check now.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No current Codex limits. Check your CLI login and use Check now."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 Codex 한도 정보가 없습니다. CLI 로그인 상태를 확인하고 지금 확인을 눌러주세요."
+          }
+        }
+      }
+    },
+    "No data received yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data received yet"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 수신된 데이터 없음"
+          }
+        }
+      }
+    },
+    "No limits received": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No limits received"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한도 미수신"
           }
         }
       }
@@ -1779,6 +2289,23 @@
         }
       }
     },
+    "No recent activity detected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recent activity detected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 활동 없음"
+          }
+        }
+      }
+    },
     "No recorded data": {
       "localizations": {
         "en": {
@@ -1808,6 +2335,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "사용량 데이터가 없습니다"
+          }
+        }
+      }
+    },
+    "Not checked yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not checked yet"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 확인하지 않음"
           }
         }
       }
@@ -1842,6 +2386,108 @@
           "stringUnit": {
             "state": "translated",
             "value": "수신되지 않음"
+          }
+        }
+      }
+    },
+    "Notification permission not requested": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notification permission not requested"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림 권한 요청 전"
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림"
+          }
+        }
+      }
+    },
+    "Notifications allowed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications allowed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림 허용됨"
+          }
+        }
+      }
+    },
+    "Notifications disabled in macOS Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications disabled in macOS Settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 설정에서 알림이 꺼져 있음"
+          }
+        }
+      }
+    },
+    "Notifications require tracken to be running. macOS notification and Focus settings control delivery.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications require tracken to be running. macOS notification and Focus settings control delivery."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림을 받으려면 tracken이 실행 중이어야 합니다. 실제 알림 표시는 macOS 알림 및 집중 모드 설정을 따릅니다."
+          }
+        }
+      }
+    },
+    "Notify when an exhausted limit recovers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notify when an exhausted limit recovers"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "소진된 한도 회복 시 알림"
           }
         }
       }
@@ -2016,6 +2662,23 @@
         }
       }
     },
+    "Plan": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "플랜"
+          }
+        }
+      }
+    },
     "Platform": {
       "extractionState": "manual",
       "localizations": {
@@ -2135,6 +2798,40 @@
         }
       }
     },
+    "Received %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Received %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 수신"
+          }
+        }
+      }
+    },
+    "Recent local activity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent local activity"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 로컬 사용 활동"
+          }
+        }
+      }
+    },
     "Recorded history starts %@": {
       "localizations": {
         "en": {
@@ -2147,6 +2844,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "기록 시작일 %@"
+          }
+        }
+      }
+    },
+    "Recovery requires new limit data below 100%. Expired or missing data never triggers a recovery notification.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovery requires new limit data below 100%. Expired or missing data never triggers a recovery notification."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새로 받은 한도가 100% 미만일 때만 회복을 알립니다. 만료되거나 없는 데이터로는 회복 알림을 보내지 않습니다."
           }
         }
       }
@@ -2198,6 +2912,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "창을 닫아도 매시간 갱신됩니다"
+          }
+        }
+      }
+    },
+    "Refreshing limits…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refreshing limits…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한도 갱신 중…"
           }
         }
       }
@@ -2283,6 +3014,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "초기화: %@"
+          }
+        }
+      }
+    },
+    "Resets at %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resets at %@."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 초기화됩니다."
           }
         }
       }
@@ -2455,6 +3203,23 @@
         }
       }
     },
+    "Subscription limits": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscription limits"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "구독 한도"
+          }
+        }
+      }
+    },
     "Sync now": {
       "extractionState": "manual",
       "localizations": {
@@ -2485,6 +3250,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "공식 단가표를 검증하지 못했습니다. 이전 단가를 유지합니다."
+          }
+        }
+      }
+    },
+    "The received time is when Claude supplied data, not when tracken last read the file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The received time is when Claude supplied data, not when tracken last read the file."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "수신 시각은 Claude가 데이터를 제공한 시각입니다. tracken이 파일을 읽은 시각과는 다릅니다."
           }
         }
       }
@@ -2642,6 +3424,23 @@
         }
       }
     },
+    "Turning adaptive refresh off uses hourly polling. Opening the menu still checks limits if the previous attempt was over a minute ago.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turning adaptive refresh off uses hourly polling. Opening the menu still checks limits if the previous attempt was over a minute ago."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 기능을 끄면 1시간마다 갱신합니다. 메뉴를 열 때는 마지막 조회 시도 후 1분이 지났으면 한도를 확인합니다."
+          }
+        }
+      }
+    },
     "Type": {
       "extractionState": "manual",
       "localizations": {
@@ -2795,6 +3594,23 @@
         }
       }
     },
+    "Usage history": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage history"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용 기록"
+          }
+        }
+      }
+    },
     "Usage history and subscription limits are collected separately. Saved VS Code conversations can provide token history even when no terminal status-line limits have arrived.": {
       "extractionState": "manual",
       "localizations": {
@@ -2931,6 +3747,23 @@
         }
       }
     },
+    "Vertical": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "세로"
+          }
+        }
+      }
+    },
     "View %@ details": {
       "extractionState": "manual",
       "localizations": {
@@ -2944,6 +3777,74 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 상세 보기"
+          }
+        }
+      }
+    },
+    "Warn at 80% used": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warn at 80% used"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "80% 사용 시 알림"
+          }
+        }
+      }
+    },
+    "Warn at 90% used": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warn at 90% used"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90% 사용 시 알림"
+          }
+        }
+      }
+    },
+    "Warnings are sent once per threshold in each limit window. If usage jumps past both thresholds, only the higher warning is sent.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warnings are sent once per threshold in each limit window. If usage jumps past both thresholds, only the higher warning is sent."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 한도 기간에서 임계값별로 한 번씩 알립니다. 두 임계값을 한 번에 넘으면 높은 단계의 경고만 보냅니다."
+          }
+        }
+      }
+    },
+    "While local usage is active: limits every minute, history every 5 minutes. When idle: limits every 5 minutes, history every hour. Claude's limit cache is checked every 30 seconds.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "While local usage is active: limits every minute, history every 5 minutes. When idle: limits every 5 minutes, history every hour. Claude's limit cache is checked every 30 seconds."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 사용 기록이 있으면 한도는 1분, 기록은 5분마다 갱신합니다. 활동이 없으면 한도는 5분, 기록은 1시간마다 갱신합니다. Claude 한도 파일은 30초마다 확인합니다."
           }
         }
       }

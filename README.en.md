@@ -1,8 +1,10 @@
+![tracken app icon](docs/images/app-icon.png)
+
 # tracken
 
 [한국어](README.md) · **English**
 
-A macOS app for viewing Codex and Claude Code token usage, estimated API-equivalent costs, and subscription limits in one place. It provides a main dashboard and a menu bar popover, with hourly refreshes while the app is running—even when its main window is closed.
+A macOS app for viewing Codex and Claude Code token usage, estimated API-equivalent costs, and subscription limits in one place. It provides a main dashboard and a menu bar popover, with activity-aware refreshes while the app is running—even when its main window is closed.
 
 tracken is an **independently developed app**, not a built-in Claude or Codex feature. It reads data through the local Codex App Server, Claude Code session files, and Claude Code's official status-line feature.
 
@@ -20,6 +22,8 @@ tracken is an **independently developed app**, not a built-in Claude or Codex fe
 - [Subscription limits and the Claude status line](#subscription-limits-and-the-claude-status-line)
 - [Cost estimates and pricing updates](#cost-estimates-and-pricing-updates)
 - [Automatic and manual refresh](#automatic-and-manual-refresh)
+- [Connection status](#connection-status)
+- [Quota warnings and recovery notifications](#quota-warnings-and-recovery-notifications)
 - [Data locations and coverage](#data-locations-and-coverage)
 - [Troubleshooting](#troubleshooting)
 - [Development and verification](#development-and-verification)
@@ -31,29 +35,31 @@ tracken is an **independently developed app**, not a built-in Claude or Codex fe
 | Total dashboard | Combined tokens and estimated costs for today and the last 14 days, provider status, and stacked daily charts |
 | Codex details | 14-day, 30-day, or all-history selection; historical backfill and persistent collection; daily/per-model tokens and cost estimates; account plan and limit |
 | Claude details | Last 14 days, last 30 days, or all local history; input, output, and cache tokens; daily and per-model cost estimates |
-| Menu bar | Each provider's 14-day tokens, today's tokens and estimated cost, combined tokens, and Codex/Claude subscription limits |
+| Period cost summaries | Both providers show the last 14 days' estimated cost by default; the title and amount follow 30-day or all-history selections |
+| Menu bar gauges | Icon-only, gauges, or gauges with percentages; vertical or horizontal layout; immediate changes saved across launches |
+| Menu bar popover | Each provider's 14-day tokens, today's tokens and estimated cost, combined tokens, subscription limits, and receipt status |
 | Limit display | Used percentages and reset times. The Codex menu supports both primary and secondary windows, including responses with only one window |
 | Pricing management | Automatic official standard API price updates, manual updates per provider, disk caches, and bundled offline prices |
 | Charts and lists | Switch between tokens and estimated cost, inspect dates on hover, and distinguish partial cost estimates |
 | Korean and English | Immediate language changes across the dashboard, menu, and settings; saved across launches |
+| Monitoring and notifications | Activity-aware refresh, independent history/limit connection status, and optional 80%/90% warnings and recovery notifications |
 | Connection management | Reuse the Codex CLI login, read Claude local history automatically, and remove legacy Anthropic API keys |
 
 ## Screenshots
 
-These screenshots use sample data rather than real account information. Some images predate the latest limit-display additions.
+These images render the September 30, 2026 UI with documentation sample data. Account details, usage, and limits are illustrative.
 
-![Total dashboard with stacked Codex and Claude usage](docs/images/dashboard.png)
+![New mascot with vertical and horizontal menu bar gauges](docs/images/menu-bar-layouts-en.png)
 
-<details>
-<summary>Korean dashboard and language settings</summary>
+![Total dashboard with stacked Codex and Claude usage](docs/images/dashboard-overview-en.png)
 
-![Korean dashboard](docs/images/dashboard-ko.png)
+**Menu bar popover and notification settings**
 
-<img src="docs/images/language-settings.png" alt="Korean and English language settings" width="480">
+![Menu bar popover with subscription limits and receipt status](docs/images/menu-bar-popover-en.png)
 
-</details>
+![Codex and Claude quota warning and recovery settings](docs/images/quota-notifications-en.png)
 
-<img src="docs/images/menu-bar.png" alt="Example menu bar popover" width="360">
+See the [Korean README](README.md#실행-화면) for Korean screenshots.
 
 ## Requirements
 
@@ -200,12 +206,22 @@ Open **Settings → Language** and select **한국어 (Korean)** or **English**.
 
 Daily aggregation uses the Mac's current calendar and time zone. Codex shows uncollected dates as **No recorded data / —**; an explicit zero returned by the server remains zero. Totals include available records only. Claude continues to fill dates without local records with zero; its **All local history** view covers files currently present.
 
+### Codex and Claude cost summaries
+
+Both provider pages default to **last-14-day tokens and estimated cost** in their top cards. Selecting the last 30 days or all history updates the token total and the cost card's title and amount to match. The separate today's tokens and cost cards continue to show today only.
+
+Costs are **API-equivalent estimates in USD**. When only some records can be priced, the card is labeled **partial**; when no amount can be calculated, it shows `—`. Subscription limits remain available through the menu bar gauges and separate limit displays.
+
+**Example: Codex's last-14-day cost summary**
+
+![Codex last-14-day estimated cost summary](docs/images/codex-cost-summary-en.png)
+
 ### Codex backfill and all history
 
 On the Codex tab, select **Last 14 days**, **Last 30 days**, or **All history**. Token totals, costs, daily charts/lists, and model details follow that selection. Total and the menu bar continue to use the last 14 days.
 
 - On connection, the app imports past token metadata from `~/.codex/sessions` and `~/.codex/archived_sessions`. Resumed conversations are grouped by the dates when tokens were used.
-- At launch, hourly, and on manual refresh, it incorporates local records and server daily totals. Repeated responses are deduplicated; a server value replaces the previously saved value for the same date. Dates that roll out of the response window remain saved.
+- At launch, on scheduled refresh, and on manual refresh, it incorporates local records and server daily totals. Repeated responses are deduplicated; a server value replaces the previously saved value for the same date. Dates that roll out of the response window remain saved.
 - Already saved token metadata remains available if a source session disappears. Raw per-model token data allows historical costs to be recalculated when prices change.
 - Server totals are separated by a hash of the normalized login email. When no email is available, account totals are not saved under a shared identity. Workspaces under the same email are not separated. Local sessions are device-scoped and may include other accounts used on this Mac.
 - If account identity is available but the daily-total request fails, the app displays saved totals and local history with a notice. Subscription limits are never inferred from archived usage.
@@ -231,14 +247,25 @@ Provider pages also show per-model tokens and estimated costs. Claude includes i
 
 By default, the menu bar displays the tracken icon alongside Codex and Claude subscription usage gauges and percentages. Choose **Settings → Menu bar → Menu bar display → Icon only / Usage gauges / Gauges and percentages**. Changes apply immediately and persist across launches.
 
-Each gauge shows the **highest usage percentage** among that provider's current short-term and weekly limits. Codex is the top row and Claude is the bottom row; hover to see the selected limit window. Missing or expired limits appear as `—`, distinct from actual 0% usage. Values follow the existing hourly automatic refresh or manual refresh, while expiry is checked every 30 seconds.
+Choose **Settings → Menu bar → Gauge layout → Vertical / Horizontal** to arrange the providers. The default vertical layout places Codex above Claude; the horizontal layout places Codex on the left and Claude on the right. Layout changes apply immediately and persist across launches. The layout picker is disabled while **Icon only** is selected.
+
+![Vertical and horizontal Codex and Claude gauge layouts](docs/images/menu-bar-layouts-en.png)
+
+**Gauge display and layout settings**
+
+![Menu bar settings with horizontal layout selected](docs/images/menu-bar-settings-en.png)
+
+The horizontal layout uses larger text and thicker bars; the vertical layout fits both rows into less space. Percentages use fixed-width columns so changing values do not shift the layout. The monochrome icon and gauges adapt to light and dark menu bars.
+
+Each gauge shows the **highest usage percentage** among that provider's current short-term and weekly limits. Hover to see the selected limit window. Missing or expired limits appear as `—`, distinct from actual 0% usage. Values follow activity-aware automatic or manual refresh. Opening the menu rechecks limits when the previous attempt was over a minute ago; expiry is checked every 30 seconds.
 
 Click the tracken icon or gauges in the macOS menu bar to open the popover:
 
 - Each provider's 14-day tokens, today's tokens and estimated cost, and connection status
 - Codex primary/secondary limits and Claude 5-hour/7-day limits
 - Combined 14-day tokens when at least one provider is connected
-- Full usage refresh, **Open tracken**, and **Quit**
+- Each provider's limit receipt time, missing data, or failed refresh
+- Full usage refresh, **Open tracken**, **Settings**, and **Quit**
 
 Closing the main window keeps the menu bar app and automatic refresh running. Use **Quit** to stop the app completely.
 
@@ -261,7 +288,7 @@ Limits come from `account/rateLimits/read` in the [Codex App Server](https://lea
 
 The menu popover retains and displays both `primary` and `secondary` windows. Labels follow the window durations returned by the server, so **two fixed 5-hour and 7-day windows are not guaranteed**. An account returning only a weekly limit shows only that window. If no windows are supplied, the app shows Not reported.
 
-The Total card and Codex detail summary currently use `primary`. Use the menu popover to inspect both windows' individual progress bars and expiration states.
+The Total provider card and the **Usage limit** field inside Codex details use `primary`. The cost summary at the top of the detail page shows the selected period's estimated cost. The menu bar gauge selects the highest percentage among valid windows, so it can differ from `primary`. Use the menu popover to inspect both windows' individual progress bars and expiration states.
 
 ### Install the Claude status-line bridge
 
@@ -359,19 +386,38 @@ If downloading, validation, or saving fails, the app retains the previous prices
 
 ## Automatic and manual refresh
 
-| Action | Usage and limits | Prices |
+Toggle **Settings → Connection status → Adaptive refresh**. It is enabled by default. A Codex or Claude session file modified within the last five minutes counts as recent activity. Detection reads file metadata only, without decoding conversations; a running process alone does not count as activity.
+
+| Action | Usage history | Subscription limits |
 | --- | --- | --- |
-| App launch | Read Codex/Claude usage and the Claude limit cache | Download if refresh conditions are met |
-| Hourly while running | Read all usage and limits again | Check when 24 hours have elapsed since the last successful verification |
-| Main-window or menu refresh | Read all usage and limits again | Does not force a price update |
-| Codex Sync now | Read only Codex usage and limits | Does not force a price update |
-| Claude Reload history | Read Claude history and the limit cache | Does not force a price update |
-| Provider Update prices now | Recalculate that provider if rates changed | Check the selected provider immediately |
-| Open a window/menu or change a session file | Does not trigger a read by itself | Does not trigger a check by itself |
+| App launch | Aggregate both providers | Query Codex; read the Claude cache |
+| Recent local activity | Every 5 minutes | Codex every minute; Claude cache every 30 seconds |
+| No recent activity | Every hour | Codex every 5 minutes; Claude cache every 30 seconds |
+| Adaptive refresh disabled | Every hour | Every hour |
+| Open menu | No full history scan | Query Codex if the previous attempt was over a minute ago; also check the Claude cache according to refresh settings |
+| Main-window/menu refresh or Check now | Aggregate both providers | Check both providers |
+| Provider Sync now or Reload history | Aggregate only that provider | Check only that provider |
 
-Automatic retries after a pricing failure are at least one hour apart. Conditional requests use ETag or Last-Modified when available. Overlapping usage refreshes for the same provider are deduplicated.
+Quota polling is separate from full history scans and price downloads. Overlapping requests of the same kind are coalesced. History and limit errors and receipt times remain independent. Monitoring and notifications do not run while the app is quit or the Mac is asleep.
 
-A new Claude status-line cache appears in tracken at the next hourly or manual refresh. Limit views periodically reevaluate expiration for display, but this does not fetch the server or reread the file. The Claude limit update timestamp records when the bridge received data; it is not guaranteed to be the provider server's measurement time.
+Scheduled history refreshes check price-cache freshness. Prices update after 24 hours since the last successful verification, and pricing failures retry at least one hour apart. Conditional requests use ETag or Last-Modified when available. Normal manual refresh does not force price updates; use **Provider settings → Update prices now** for an immediate check.
+
+### Connection status
+
+**Settings → Connection status** shows the connected account/plan, separate history and limit receipt/check times, errors, and data locations. The menu popover also shows each provider's limit receipt time, missing data, or a failed refresh.
+
+Rereading the Claude file does not change its displayed receipt time. That timestamp comes from the bridge; reading the file does not request fresh data from Claude's servers. A new terminal status-line response is required to update the source data. Token history and missing subscription limits are presented separately.
+
+### Quota warnings and recovery notifications
+
+Turn on **Settings → Notifications → Enable limit notifications**. Notifications default to off, and enabling them requests macOS notification permission. If denied, allow tracken under **System Settings → Notifications**, then enable notifications again.
+
+- Enable **Warn at 80% used** and **Warn at 90% used** separately for Codex and Claude.
+- Each threshold warns once per short-term/weekly window. A jump across both thresholds sends only the higher warning. Alert state persists across restarts.
+- **Notify when an exhausted limit recovers** requires a previously exhausted window to be below 100% in fresh data. Another exhausted window, or a missing previously exhausted window, suppresses recovery notices.
+- Passing the reset timestamp alone never implies recovery. Data received over two minutes ago, expired values, and missing values do not produce alerts.
+- Codex alert state is separated by verified account identity. Claude's bridge does not report an account identifier, so its alert state is local to this Mac's bridge.
+- macOS notification permission and Focus settings control whether banners and sounds appear.
 
 ## Data locations and coverage
 
@@ -400,6 +446,7 @@ These are not separate tracken services. The `tracken` label in Claude's status 
 | `settings-before-*.json` in that folder | Claude settings backups made before installation or removal |
 | `~/Library/Application Support/tracken/Pricing/codex.json` | Validated OpenAI pricing cache |
 | `~/Library/Application Support/tracken/Pricing/anthropic.json` | Validated Claude pricing cache |
+| macOS app preferences (`UserDefaults`) | Display language, menu bar style/layout, refresh and notification settings, and alert deduplication state |
 
 There is no GUI folder picker for source history. Apply environment variables when launching the app.
 
@@ -420,6 +467,9 @@ There is currently no project-by-project or multi-account dashboard, CSV export,
 | Symptom | What to check |
 | --- | --- |
 | Xcode cannot be found during build | Install the full Xcode app, complete first-launch setup, and confirm that `DEVELOPER_DIR` points to it. |
+| Old icon or menu still appears after a build | **Quit** the running app, copy the new `tracken.app` into `/Applications`, then relaunch it. Building alone does not replace the installed app. |
+| Gauges are missing or horizontal layout is unavailable | Under **Settings → Menu bar**, select **Usage gauges** or **Gauges and percentages**, then choose **Gauge layout → Horizontal**. |
+| Limit notifications do not arrive | They default to off. Keep tracken running and check **Settings → Notifications → Enable limit notifications**, provider thresholds, macOS permission, and Focus settings. Expired or stale data does not trigger alerts. |
 | Codex CLI not found | Check `command -v codex`. It must be executable at a supported default location or through the app process's `PATH`. |
 | Codex needs login or cannot fetch usage | Check the CLI's ChatGPT login and network connection, then connect or sync again in Settings. |
 | Only a weekly Codex limit appears | The server may provide only one window. tracken does not invent a 5-hour limit. |
@@ -447,22 +497,22 @@ tracken/
 ├── tracken.xcodeproj/           # Xcode project
 ├── Configuration/              # Info.plist and build configuration
 ├── Scripts/                    # Status-line installation/runtime, tests, icon generator
-├── Tests/                      # Usage, pricing, limit, and localization regressions; official pricing fixture
+├── Tests/                      # Usage, pricing, gauge, refresh, notification, and localization regressions
 ├── docs/images/                # Sample documentation screenshots
 └── tracken/
     ├── App/                    # App entry point and single-instance management
     ├── Features/
     │   ├── Dashboard/          # Total/provider pages, charts, and lists
-    │   ├── MenuBar/            # Popover and Codex limit display
-    │   └── Settings/           # Connections, history, language, and prices
+    │   ├── MenuBar/            # Vertical/horizontal gauges, popover, and limit receipt status
+    │   └── Settings/           # Connection status, notifications, menu bar, language, and providers
     ├── Models/                 # Usage, cost, and limit models
-    ├── Services/               # App Server, local history, prices, limit cache, Keychain
+    ├── Services/               # App Server, local history, prices, limit cache, activity, and notifications
     ├── Stores/                 # Shared state and refresh coordination
     ├── Utilities/              # Formatting, localization, and chart selection
     └── Resources/              # Icons, colors, and Korean/English strings
 ```
 
-The app uses SwiftUI, Swift Charts, Observation, Swift Concurrency, Foundation, and AppKit. Security/Keychain Services supports legacy API key management.
+The app uses SwiftUI, Swift Charts, Observation, Swift Concurrency, Foundation, AppKit, and UserNotifications. Security/Keychain Services supports legacy API key management.
 
 ### Regression tests
 
@@ -472,13 +522,13 @@ Run from the repository root. Tests use temporary files and response fixtures wi
 ./Scripts/test-usage.sh
 ```
 
-Coverage includes calendar/time-zone aggregation, deduplication, resumed sessions, partial costs, both Codex windows and weekly-only responses, Claude bridge installation/restoration, hourly scheduling, pricing caches and offline fallback, repricing, official Claude HTML footnotes and 19 models, Codex historical backfill/restart persistence/date corrections/account isolation/period selection/missing dates, and Korean/English strings.
+Coverage includes calendar/time-zone aggregation, deduplication, resumed sessions, partial costs, both Codex windows and weekly-only responses, Claude bridge installation/restoration, menu bar quota selection/layout caching/preference persistence, hourly/adaptive scheduling and menu freshness, notification deduplication/recovery/permissions/delivery failures, pricing caches and offline fallback, repricing, official Claude HTML footnotes and 19 models, Codex historical backfill/restart persistence/date corrections/account isolation/period selection/missing dates, and Korean/English strings.
 
 The earlier build command also verifies a local Release build. `DerivedData/` is excluded from Git.
 
 ### Update icons
 
-The Dock/Finder app icon is generated from vector shapes in the [icon generator](Scripts/generate-app-icon.swift). After editing it, regenerate assets with the following command. The menu bar uses a separate monochrome asset.
+The Dock/Finder app icon and menu bar mascot share the vector silhouette in the [icon generator](Scripts/generate-app-icon.swift). After editing it, regenerate all PNG sizes and the monochrome menu bar SVG with the following command. The small menu bar asset omits the eye highlights and smile.
 
 ```bash
 swift Scripts/generate-app-icon.swift

@@ -66,6 +66,18 @@ private struct MenuBarGaugeFailure: Error { let message: String }
         try check(MenuBarGaugeImage.make(gauges: [short], showsPercent: false) !== updated,
                   "Display-style changes must invalidate the cached image")
 
+        let pair = [codex, MenuBarUsageGauge.claude(snapshot, now: now)]
+        for showsPercent in [false, true] {
+            let vertical = MenuBarGaugeImage.make(gauges: pair, showsPercent: showsPercent, layout: .vertical)
+            let horizontal = MenuBarGaugeImage.make(gauges: pair, showsPercent: showsPercent, layout: .horizontal)
+            try check(horizontal !== vertical && horizontal.isTemplate
+                      && horizontal.size.width > vertical.size.width
+                      && horizontal.size.height == vertical.size.height,
+                      "Changing layout must replace the cached image and fit both providers at menu bar height")
+            try check(horizontal === MenuBarGaugeImage.make(gauges: pair, showsPercent: showsPercent, layout: .horizontal),
+                      "Unchanged horizontal labels must also avoid a MenuBarExtra update loop")
+        }
+
         let domain = "tracken-menu-bar-tests-\(UUID())"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
@@ -80,6 +92,13 @@ private struct MenuBarGaugeFailure: Error { let message: String }
         defaults.set("invalid", forKey: AppSettings.menuBarDisplayStyleKey)
         try check(AppSettings(defaults: defaults).menuBarDisplayStyle == .gaugesAndPercent,
                   "An unknown saved style must fall back to visible gauges")
-        print("PASS: menu bar quota selection, expiry, missing/invalid values and display preference persistence")
+        try check(settings.menuBarGaugeLayout == .vertical, "Existing installations must retain their vertical layout")
+        settings.menuBarGaugeLayout = .horizontal
+        try check(AppSettings(defaults: defaults).menuBarGaugeLayout == .horizontal,
+                  "The chosen horizontal layout must survive a restart")
+        defaults.set("invalid", forKey: AppSettings.menuBarGaugeLayoutKey)
+        try check(AppSettings(defaults: defaults).menuBarGaugeLayout == .vertical,
+                  "An unknown layout must fall back to the original vertical layout")
+        print("PASS: menu bar quota selection, expiry, missing/invalid values, layout caching and display preference persistence")
     }
 }

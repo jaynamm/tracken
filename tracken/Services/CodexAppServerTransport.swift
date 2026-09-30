@@ -40,6 +40,7 @@ final class CodexAppServerTransport {
     private var nextRequestID = 1
     private var pendingRequests: [Int: Completion] = [:]
     private var isInitialized = false
+    private var initialization: Task<Void, Error>?
 
     deinit {
         outputHandle?.readabilityHandler = nil
@@ -60,6 +61,14 @@ final class CodexAppServerTransport {
 
     private func startIfNeeded() async throws {
         guard !isInitialized else { return }
+        if let initialization { return try await initialization.value }
+        let task = Task { try await self.startProcess() }
+        initialization = task
+        defer { initialization = nil }
+        try await task.value
+    }
+
+    private func startProcess() async throws {
         guard let executableURL = Self.findCodexExecutable() else {
             throw CodexAppServerError.cliNotFound
         }
@@ -241,7 +250,7 @@ final class CodexAppServerTransport {
         completions.forEach { $0(.failure(error)) }
     }
 
-    private static func findCodexExecutable() -> URL? {
+    static func findCodexExecutable() -> URL? {
         var paths = ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"]
         if let environmentPath = ProcessInfo.processInfo.environment["PATH"] {
             paths += environmentPath.split(separator: ":").map { "\($0)/codex" }

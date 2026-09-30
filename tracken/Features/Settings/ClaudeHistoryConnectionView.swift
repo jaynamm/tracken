@@ -11,7 +11,7 @@ struct ClaudeHistoryConnectionView: View {
             Text("Reads saved usage from this Mac automatically. No API key is needed. Claude web and other devices are not included.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Label(L10n.text(store.isAutoRefreshEnabled ? "Refreshes every hour, even with the window closed" : "Automatic refresh paused"),
+            Label(L10n.text(store.isAutoRefreshEnabled ? "Monitors usage even with the window closed" : "Automatic refresh paused"),
                   systemImage: "clock")
                 .font(.caption)
                 .foregroundStyle(.secondary)

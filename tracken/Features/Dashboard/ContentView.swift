@@ -75,7 +75,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("tracken")
                     .font(.headline)
-                Text("Codex & Claude · hourly refresh")
+                Text("Codex & Claude · usage monitor")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -87,7 +87,7 @@ struct ContentView: View {
             } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .disabled(store.isRefreshing)
+            .disabled(store.isRefreshing || store.isRefreshingLimits)
             .help("Refresh usage")
 
             Button {
@@ -118,7 +118,7 @@ struct ContentView: View {
     private func summary(for provider: AIProvider) -> some View {
         let dayCount = dayCount(for: provider)
         let usage = store.usage(for: provider)?.displayUsage(dayCount: dayCount)
-        let secondary = SecondarySummary(provider: provider, usage: usage)
+        let cost = PeriodCostSummary(usage: usage, dayCount: dayCount)
 
         return HStack(spacing: 12) {
             DashboardSummaryTile(
@@ -128,10 +128,11 @@ struct ContentView: View {
                 systemImage: "number"
             )
             DashboardSummaryTile(
-                title: secondary.title,
-                value: secondary.value,
-                systemImage: secondary.systemImage
+                title: cost.title,
+                value: cost.value,
+                systemImage: "dollarsign.circle"
             )
+            .help("API-equivalent cost of recorded usage. Not a subscription charge.")
         }
     }
 
@@ -153,22 +154,20 @@ struct ContentView: View {
     }
 }
 
-private struct SecondarySummary {
+private struct PeriodCostSummary {
     let title: String
     let value: String
-    let systemImage: String
 
-    init(provider: AIProvider, usage: TokenUsage?) {
-        switch provider {
-        case .codex:
-            title = "Usage limit"
-            value = usage?.rateLimit.map { Format.percent($0.usedPercent) } ?? "—"
-            systemImage = "gauge.with.dots.needle.50percent"
-        case .anthropic:
-            title = usage?.isPartialCostEstimate == true ? "Partial estimated cost" : "Estimated cost"
-            value = usage?.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—"
-            systemImage = "dollarsign.circle"
+    init(usage: TokenUsage?, dayCount: Int?) {
+        let isPartial = usage?.isPartialCostEstimate == true
+        if let dayCount {
+            title = L10n.format(isPartial
+                ? "Last %lld days partial estimated cost"
+                : "Last %lld days estimated cost", dayCount)
+        } else {
+            title = isPartial ? "All history partial estimated cost" : "All history estimated cost"
         }
+        value = usage?.knownEstimatedCostUSD.map { Format.cost($0) } ?? "—"
     }
 }
 

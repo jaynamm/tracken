@@ -9,6 +9,7 @@ import Foundation
 @MainActor
 protocol CodexUsageProviding: AnyObject {
     func fetchUsage() async throws -> TokenUsage
+    func fetchLimits() async throws -> CodexLimitSnapshot
     func connectWithChatGPT() async throws
     func logout() async throws
 }
@@ -42,9 +43,8 @@ final class CodexAppServerClient: CodexUsageProviding {
         }
 
         async let usageResponse = try? await transport.request(method: "account/usage/read", as: UsageResponse.self)
-        async let limitsResponse = try? await transport.request(method: "account/rateLimits/read", as: RateLimitsResponse.self)
         async let localEstimates = costEstimator.estimateRecentUsage(dayCount: nil, now: Date())
-        let (usage, limits, estimates) = try await (usageResponse, limitsResponse, localEstimates)
+        let (usage, estimates) = try await (usageResponse, localEstimates)
 
         let receivedDaily = usage?.dailyUsageBuckets.map { $0.compactMap(Self.makeDailyUsage) }
         let officialDaily: [DailyUsage]
@@ -67,16 +67,29 @@ final class CodexAppServerClient: CodexUsageProviding {
             estimatedCostUSD: TokenUsage.completeDailyEstimatedCost(for: daily),
             account: ProviderAccount(
                 email: account.email,
-                planName: account.planType ?? limits?.codexLimits?.planType
+                planName: account.planType
             ),
             lifetimeTokens: usage?.summary?.lifetimeTokens,
-            rateLimit: limits?.codexLimits?.primary?.rateLimit,
-            secondaryRateLimit: limits?.codexLimits?.secondary?.rateLimit,
             fillsMissingDaysWithZero: false,
             historyNotice: receivedDaily == nil
                 ? "Account daily totals could not be refreshed. Showing saved totals and local history."
                 : nil
         )
+    }
+
+    /// No token history scan, archive write or pricing request on this path.
+    func fetchLimits() async throws -> CodexLimitSnapshot {
+        guard let account = try await readAccount() else { throw CodexAppServerError.notSignedIn }
+        let response: RateLimitsResponse = try await transport.request(method: "account/rateLimits/read")
+        let limits = [response.codexLimits?.primary?.rateLimit, response.codexLimits?.secondary?.rateLimit].compactMap { $0 }
+        guard limits.allSatisfy({
+            $0.usedPercent.isFinite && (0...100).contains($0.usedPercent) && $0.windowDurationMinutes > 0
+                && ($0.resetsAt.map { $0.timeIntervalSince1970.isFinite && $0.timeIntervalSince1970 > 0 } ?? true)
+        }) else { throw CodexAppServerError.protocolError("Codex returned invalid subscription limits.") }
+        return CodexLimitSnapshot(
+            account: ProviderAccount(email: account.email, planName: account.planType ?? response.codexLimits?.planType),
+            limits: limits,
+            receivedAt: Date())
     }
 
     func connectWithChatGPT() async throws {

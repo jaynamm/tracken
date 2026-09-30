@@ -6,12 +6,14 @@
 import SwiftUI
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
-    case menuBar, language, codex, claude
+    case monitoring, notifications, menuBar, language, codex, claude
 
     var id: Self { self }
 
     var title: String {
         switch self {
+        case .monitoring: L10n.text("Connection status")
+        case .notifications: L10n.text("Notifications")
         case .menuBar: L10n.text("Menu bar")
         case .language: L10n.text("Language")
         case .codex: AIProvider.codex.shortName
@@ -21,6 +23,8 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
+        case .monitoring: "antenna.radiowaves.left.and.right"
+        case .notifications: "bell"
         case .menuBar: "menubar.rectangle"
         case .language: "globe"
         case .codex: AIProvider.codex.symbolName
@@ -32,9 +36,9 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable private var settings = AppSettings.shared
-    @State private var selectedPage: SettingsPage? = .menuBar
+    @State private var selectedPage: SettingsPage? = .monitoring
 
-    private var currentPage: SettingsPage { selectedPage ?? .menuBar }
+    private var currentPage: SettingsPage { selectedPage ?? .monitoring }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,7 +61,7 @@ struct SettingsView: View {
                 }
                 .listStyle(.sidebar)
                 .scrollDisabled(true)
-                .frame(width: 172)
+                .frame(width: 196)
                 .accessibilityLabel(Text("Settings"))
 
                 Divider()
@@ -70,6 +74,10 @@ struct SettingsView: View {
 
                     Form {
                         switch currentPage {
+                        case .monitoring:
+                            MonitoringSettingsView()
+                        case .notifications:
+                            NotificationSettingsView()
                         case .menuBar:
                             menuBarSettings
                         case .language:
@@ -97,10 +105,17 @@ struct SettingsView: View {
                     Text(L10n.text(style.titleKey)).tag(style)
                 }
             }
+            Picker("Gauge layout", selection: $settings.menuBarGaugeLayout) {
+                ForEach(MenuBarGaugeLayout.allCases) { layout in
+                    Text(L10n.text(layout.titleKey)).tag(layout)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(settings.menuBarDisplayStyle == .iconOnly)
             Text("Shows the highest usage among each provider's current subscription limits.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("Gauges show the percentage used, not remaining tokens. Missing or expired limits appear as —. Updates follow the existing hourly refresh.")
+            Text("Gauges show the percentage used. Missing or expired limits appear as —. Refresh frequency is managed in Connection status.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

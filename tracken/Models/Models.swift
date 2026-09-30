@@ -325,6 +325,14 @@ nonisolated struct TokenUsage: Identifiable, Equatable, Sendable, CostEstimating
                           fillsMissingDaysWithZero: fillsMissingDaysWithZero, historyNotice: historyNotice)
     }
 
+    func replacingLimits(_ snapshot: CodexLimitSnapshot) -> TokenUsage {
+        TokenUsage(provider: provider, daily: daily, modelUsage: modelUsage, granularity: granularity,
+                   estimatedCostUSD: estimatedCostUSD, updatedAt: updatedAt, account: snapshot.account,
+                   lifetimeTokens: lifetimeTokens, rateLimit: snapshot.limits.first,
+                   secondaryRateLimit: snapshot.limits.dropFirst().first,
+                   fillsMissingDaysWithZero: fillsMissingDaysWithZero, historyNotice: historyNotice)
+    }
+
     var last14Days: [DailyUsage] { recentDays(count: 14) }
 
     /// Measured zero days cost zero; missing or unpriced days leave the sum unknown.

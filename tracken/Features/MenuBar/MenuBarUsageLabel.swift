@@ -12,12 +12,13 @@ struct MenuBarUsageLabel: View {
                     .accessibilityLabel("tracken")
             } else {
                 let gauges: [MenuBarUsageGauge] = [
-                    .codex(store.usage(for: .codex), now: now),
+                    MenuBarUsageGauge(provider: .codex, limits: store.limits(for: .codex), now: now),
                     .claude(store.claudeRateLimits, now: now)
                 ]
                 let description = summary(gauges)
                 Image(nsImage: MenuBarGaugeImage.make(
-                    gauges: gauges, showsPercent: settings.menuBarDisplayStyle == .gaugesAndPercent))
+                    gauges: gauges, showsPercent: settings.menuBarDisplayStyle == .gaugesAndPercent,
+                    layout: settings.menuBarGaugeLayout))
                     .accessibilityLabel(Text(verbatim: description))
                     .help(description)
             }

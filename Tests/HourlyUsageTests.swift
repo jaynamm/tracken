@@ -11,6 +11,10 @@ private func verifyHourly(_ condition: Bool, _ message: String) throws {
         fetchCount += 1
         return TokenUsage(provider: .codex, daily: [], granularity: .aggregate)
     }
+    func fetchLimits() async throws -> CodexLimitSnapshot {
+        CodexLimitSnapshot(account: ProviderAccount(email: "fixture@example.com", planName: nil),
+                           limits: [], receivedAt: Date())
+    }
     func connectWithChatGPT() async throws {}
     func logout() async throws {}
 }
@@ -44,14 +48,19 @@ nonisolated private struct OfflineKeys: APIKeyStoring {
         }
         try record("initial", tokens: 5).write(to: projects.appendingPathComponent("a.jsonl"))
         try writeLimits(percent: 12)
+        let domain = "tracken-hourly-settings-\(UUID())"
+        let defaults = UserDefaults(suiteName: domain)!
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let settings = AppSettings(defaults: defaults)
+        settings.adaptiveRefreshEnabled = false
         let codex = OfflineCodex()
         let store = UsageStore(codexClient: codex,
-                               anthropicService: ClaudeSessionUsageService(projectsURL: projects), apiKeyStore: OfflineKeys())
+                               anthropicService: ClaudeSessionUsageService(projectsURL: projects), apiKeyStore: OfflineKeys(), settings: settings)
         store.startMonitoring(limitsDirectory: limits)
         defer { store.stopMonitoring() }
         try verifyHourly(store.isAutoRefreshEnabled, "Hourly refresh did not start")
         try await eventually { store.usage(for: .anthropic)?.totalTokens == 5 && store.claudeRateLimits?.fiveHour?.usedPercent == 12 }
-        let started = store.lastAutomaticRefresh!
+        let started = store.historyHealth[.anthropic]!.lastAttempt!
         store.startMonitoring(limitsDirectory: limits)
         try verifyHourly(codex.fetchCount == 1, "Starting twice must not create another initial refresh")
         // File writes must remain invisible until a scheduled or manual read.

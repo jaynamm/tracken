@@ -29,6 +29,11 @@ nonisolated private final class MemoryKeys: APIKeyStoring {
         if let failure { throw failure }
         return usage
     }
+    func fetchLimits() async throws -> CodexLimitSnapshot {
+        if let failure { throw failure }
+        return CodexLimitSnapshot(account: usage.account ?? ProviderAccount(email: "fixture@example.com", planName: nil),
+                                  limits: usage.rateLimits, receivedAt: Date())
+    }
     func connectWithChatGPT() async throws {}
     func logout() async throws {}
 }
@@ -64,6 +69,8 @@ private actor SettingsPricingFixture {
         try LocalizationTests.run()
         try MenuBarGaugeTests.run()
         try await HourlyUsageTests.run()
+        try await MonitoringTests.run()
+        try await QuotaNotificationTests.run()
         try await PricingRegressionTests.run()
         try await CodexHistoryTests.run()
         print("PASS: usage store, Claude local history, concurrent refresh, daily merge, rate-limit selection, session deduplication, resumed tasks, pricing")

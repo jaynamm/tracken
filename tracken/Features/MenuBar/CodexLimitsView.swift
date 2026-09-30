@@ -9,24 +9,24 @@ struct CodexLimitsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Label("Codex subscription limits", systemImage: "gauge.with.dots.needle.50percent")
                     .font(.caption.weight(.medium))
-                if let usage = state.usage {
-                    if usage.rateLimits.isEmpty {
+                if let snapshot = store.codexRateLimits {
+                    if snapshot.limits.isEmpty {
                         Text("Not reported").foregroundStyle(.secondary)
                     } else {
                         HStack(alignment: .top, spacing: 16) {
-                            ForEach(Array(usage.rateLimits.enumerated()), id: \.offset) { _, limit in
+                            ForEach(Array(snapshot.limits.enumerated()), id: \.offset) { _, limit in
                                 window(limit, now: context.date)
                             }
                         }
                     }
-                    Text("Updated \(Format.date(usage.updatedAt, time: true))")
+                    Text("Updated \(Format.date(snapshot.receivedAt, time: true))")
                         .foregroundStyle(.secondary)
                 } else if case .notConnected = state.status {
                     Text("Connect in Settings").foregroundStyle(.secondary)
                 }
-                if case .failed = state.status {
-                    Text(state.status.label).foregroundStyle(.secondary)
-                } else if case .connecting = state.status {
+                if let error = store.limitHealth[.codex]?.error {
+                    Text(L10n.message(error)).foregroundStyle(.secondary)
+                } else if store.limitHealth[.codex]?.isRefreshing == true {
                     Text("Loading…").foregroundStyle(.secondary)
                 }
             }

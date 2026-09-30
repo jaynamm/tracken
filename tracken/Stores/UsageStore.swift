@@ -20,6 +20,20 @@ final class UsageStore {
     private(set) var pricingSnapshots: [AIProvider: PricingSnapshot] = [:]
     private(set) var pricingErrors: [AIProvider: String] = [:]
     private(set) var isRefreshingPrices = false
+    private(set) var codexRateLimits: CodexLimitSnapshot?
+    private(set) var historyHealth: [AIProvider: RefreshHealth] = [:]
+    private(set) var limitHealth: [AIProvider: RefreshHealth] = [:]
+    private(set) var hasRecentActivity = false
+    private(set) var isRefreshingLimits = false
+    let notifications: QuotaNotificationService?
+    private let settings: AppSettings
+    private let activity: @Sendable (Date) async -> Bool
+    private var lastActivityCheck: Date?
+    private var lastLimitsAttempt: Date?
+    private var lastHistoryAttempt: Date?
+    private var monitoringTickInFlight = false
+    private var codexGeneration = 0
+    private var fullRefreshInFlight = false
     private let pricingCatalog: PricingCatalog?
 
     private var periodicRefresh: Task<Void, Never>?
@@ -31,6 +45,9 @@ final class UsageStore {
     private var refreshingProviders: Set<AIProvider> = []
 
     init() {
+        settings = .shared
+        notifications = QuotaNotificationService(settings: .shared)
+        activity = { now in await LocalUsageActivity().hasRecentActivity(now: now) }
         pricingCatalog = .shared
         codexClient = CodexAppServerClient()
         anthropicService = ClaudeSessionUsageService()
@@ -42,9 +59,15 @@ final class UsageStore {
         codexClient: any CodexUsageProviding,
         anthropicService: any AnthropicUsageProviding,
         apiKeyStore: any APIKeyStoring,
-        pricingCatalog: PricingCatalog? = nil
+        pricingCatalog: PricingCatalog? = nil,
+        settings: AppSettings? = nil,
+        notifications: QuotaNotificationService? = nil,
+        activity: @escaping @Sendable (Date) async -> Bool = { _ in false }
     ) {
         self.pricingCatalog = pricingCatalog
+        self.settings = settings ?? .shared
+        self.notifications = notifications
+        self.activity = activity
         self.codexClient = codexClient
         self.anthropicService = anthropicService
         self.apiKeyStore = apiKeyStore
@@ -56,7 +79,12 @@ final class UsageStore {
     }
 
     func state(for provider: AIProvider) -> ProviderState {
-        providerStates[provider] ?? .disconnected
+        var state = providerStates[provider] ?? .disconnected
+        if provider == .codex, let snapshot = codexRateLimits, let usage = state.usage,
+           snapshot.accountKey == usage.account?.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            state.usage = usage.replacingLimits(snapshot)
+        }
+        return state
     }
 
     func usage(for provider: AIProvider) -> TokenUsage? {
@@ -83,9 +111,7 @@ final class UsageStore {
 
     // MARK: - App lifetime monitoring
 
-    func startMonitoring(
-        limitsDirectory: URL = ClaudeRateLimitService.defaultDirectory
-    ) {
+    func startMonitoring(limitsDirectory: URL = ClaudeRateLimitService.defaultDirectory) {
         guard periodicRefresh == nil else { return }
         rateLimitService = ClaudeRateLimitService(directory: limitsDirectory)
         isAutoRefreshEnabled = true
@@ -93,7 +119,7 @@ final class UsageStore {
         periodicRefresh = Task { @MainActor [weak self] in
             await self?.refreshAutomaticallyIfDue()
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(Self.automaticRefreshInterval)) }
+                do { try await Task.sleep(for: .seconds(UsageRefreshPolicy.tick)) }
                 catch { return }
                 await self?.refreshAutomaticallyIfDue()
             }
@@ -106,25 +132,109 @@ final class UsageStore {
         isAutoRefreshEnabled = false
     }
 
-    /// The app owns one hourly timer. Views and file writes never initiate a read.
     func refreshAutomaticallyIfDue(now: Date = Date()) async {
+        guard isAutoRefreshEnabled, !Task.isCancelled, !monitoringTickInFlight else { return }
+        monitoringTickInFlight = true
+        defer { monitoringTickInFlight = false }
+        if UsageRefreshPolicy.isDue(last: lastActivityCheck, now: now, interval: 60) {
+            lastActivityCheck = now
+            hasRecentActivity = await activity(now)
+        }
         guard isAutoRefreshEnabled, !Task.isCancelled else { return }
-        if let lastAutomaticRefresh,
-           now.timeIntervalSince(lastAutomaticRefresh) < Self.automaticRefreshInterval { return }
-        lastAutomaticRefresh = now
-        // Reprice once in the same cycle, even when the daily price table changes.
-        await refreshPrices(recalculateUsage: false)
-        guard !Task.isCancelled else { return }
-        await refreshAll()
+        await refreshLimitsIfDue(now: now)
+        guard isAutoRefreshEnabled, !Task.isCancelled else { return }
+        let interval = UsageRefreshPolicy.historyInterval(active: hasRecentActivity,
+                                                          adaptive: settings.adaptiveRefreshEnabled)
+        if UsageRefreshPolicy.isDue(last: lastHistoryAttempt, now: now, interval: interval) {
+            lastAutomaticRefresh = now
+            await refreshPrices(recalculateUsage: false)
+            guard isAutoRefreshEnabled, !Task.isCancelled else { return }
+            await refreshHistory(now: now)
+        }
     }
 
-    func refreshClaudeRateLimits() {
+    /// Opening the menu refreshes stale quotas without scanning history.
+    func menuDidOpen(now: Date = Date()) async {
+        await refreshLimitsIfDue(now: now, staleAfter: UsageRefreshPolicy.menuStaleAfter)
+    }
+
+    func limits(for provider: AIProvider) -> [CodexRateLimit] {
+        if provider == .codex { return codexRateLimits?.limits ?? [] }
+        let windows: [(ClaudeRateLimitSnapshot.Window?, Int)] = [
+            (claudeRateLimits?.fiveHour, 300), (claudeRateLimits?.sevenDay, 10_080)
+        ]
+        return windows.compactMap { value, minutes in
+            guard let value, value.isValid else { return nil }
+            return CodexRateLimit(usedPercent: value.usedPercent, windowDurationMinutes: minutes,
+                                  resetsAt: Date(timeIntervalSince1970: value.resetsAt))
+        }
+    }
+
+    func refreshLimitsIfDue(now: Date = Date(), force: Bool = false, staleAfter: TimeInterval? = nil,
+                           provider: AIProvider? = nil) async {
+        guard !isRefreshingLimits else { return }
+        isRefreshingLimits = true
+        defer { isRefreshingLimits = false }
+        // A tiny local cache can change between server polls. Never confuse the
+        // time we read the file with the time Claude actually supplied its data.
+        if provider != .codex && (force || settings.adaptiveRefreshEnabled || UsageRefreshPolicy.isDue(
+            last: limitHealth[.anthropic]?.lastAttempt, now: now, interval: staleAfter ?? 3_600)) {
+            refreshClaudeRateLimits(now: now)
+            if let snapshot = claudeRateLimits {
+                await notifications?.process(provider: .anthropic, account: "local-claude",
+                    limits: limits(for: .anthropic), observedAt: snapshot.receivedDate, now: now)
+            }
+        }
+        guard provider != .anthropic else { return }
+        let interval = staleAfter ?? UsageRefreshPolicy.limitsInterval(
+            active: hasRecentActivity, adaptive: settings.adaptiveRefreshEnabled)
+        guard force || UsageRefreshPolicy.isDue(last: lastLimitsAttempt, now: now, interval: interval) else { return }
+        lastLimitsAttempt = now
+        limitHealth[.codex, default: RefreshHealth()].lastAttempt = now
+        limitHealth[.codex, default: RefreshHealth()].isRefreshing = true
+        defer { limitHealth[.codex, default: RefreshHealth()].isRefreshing = false }
+        let generation = codexGeneration
+        do {
+            let snapshot = try await codexClient.fetchLimits()
+            guard generation == codexGeneration else { return }
+            let oldKey = codexRateLimits?.accountKey ?? usage(for: .codex)?.account?.email?.lowercased()
+            if let oldKey, oldKey != snapshot.accountKey {
+                codexGeneration += 1
+                setState(.disconnected, for: .codex)
+                historyHealth[.codex] = RefreshHealth()
+                lastHistoryAttempt = nil
+            }
+            codexRateLimits = snapshot
+            limitHealth[.codex, default: RefreshHealth()].lastSuccess = snapshot.receivedAt
+            limitHealth[.codex, default: RefreshHealth()].error = nil
+            if let accountKey = snapshot.accountKey {
+                await notifications?.process(provider: .codex, account: accountKey,
+                    limits: snapshot.limits, observedAt: snapshot.receivedAt, now: now)
+            }
+        } catch {
+            guard generation == codexGeneration else { return }
+            limitHealth[.codex, default: RefreshHealth()].error = Self.errorMessage(error)
+            if case CodexAppServerError.notSignedIn = error {
+                codexGeneration += 1
+                codexRateLimits = nil
+                setState(.disconnected, for: .codex)
+            }
+        }
+    }
+
+    func refreshClaudeRateLimits(now: Date = Date()) {
+        limitHealth[.anthropic, default: RefreshHealth()].lastAttempt = now
         do {
             claudeRateLimits = try rateLimitService.read()
             claudeRateLimitError = nil
+            if let snapshot = claudeRateLimits {
+                limitHealth[.anthropic, default: RefreshHealth()].lastSuccess = snapshot.receivedDate
+            }
+            limitHealth[.anthropic, default: RefreshHealth()].error = nil
         } catch {
             claudeRateLimits = nil
             claudeRateLimitError = "Could not read Claude limits. Waiting for the next status-line update."
+            limitHealth[.anthropic, default: RefreshHealth()].error = claudeRateLimitError
         }
     }
 
@@ -146,7 +256,13 @@ final class UsageStore {
 
     func logoutCodex() async {
         do {
+            codexGeneration += 1
             try await codexClient.logout()
+            codexGeneration += 1
+            codexRateLimits = nil
+            limitHealth[.codex] = RefreshHealth()
+            historyHealth[.codex] = RefreshHealth()
+            lastLimitsAttempt = nil
             setState(.disconnected, for: .codex)
         } catch {
             setStatus(.failed(Self.errorMessage(error)), for: .codex)
@@ -184,22 +300,28 @@ final class UsageStore {
     }
 
     func refreshAll() async {
+        guard !isRefreshing, !fullRefreshInFlight else { return }
+        fullRefreshInFlight = true
+        defer { fullRefreshInFlight = false }
+        // Separate quotas from history: a failure in either source is visible
+        // independently and must not prevent the other source from updating.
+        await refreshLimitsIfDue(force: true)
+        await refreshHistory(now: Date())
+    }
+
+    private func refreshHistory(now: Date) async {
         guard !isRefreshing else { return }
         isRefreshing = true
+        lastHistoryAttempt = now
         defer { isRefreshing = false }
-
-        refreshClaudeRateLimits()
         async let codexRefreshed = refreshProvider(.codex)
         async let claudeRefreshed = refreshProvider(.anthropic)
         let results = await (codexRefreshed, claudeRefreshed)
-        let refreshedAnyProvider = results.0 || results.1
-        if refreshedAnyProvider {
-            lastRefreshed = Date()
-        }
+        if results.0 || results.1 { lastRefreshed = Date() }
     }
 
     func refresh(_ provider: AIProvider) async {
-        if provider == .anthropic { refreshClaudeRateLimits() }
+        await refreshLimitsIfDue(force: true, provider: provider)
         _ = await refreshProvider(provider)
     }
 
@@ -208,7 +330,11 @@ final class UsageStore {
         guard refreshingProviders.insert(provider).inserted else { return false }
         defer {
             refreshingProviders.remove(provider)
+            historyHealth[provider, default: RefreshHealth()].isRefreshing = false
         }
+        let generation = codexGeneration
+        historyHealth[provider, default: RefreshHealth()].lastAttempt = Date()
+        historyHealth[provider, default: RefreshHealth()].isRefreshing = true
         setStatus(.connecting, for: provider)
 
         do {
@@ -220,15 +346,33 @@ final class UsageStore {
                 usage = try await anthropicService.fetchUsage()
             }
 
+            guard provider != .codex || generation == codexGeneration else { return false }
+            if provider == .codex, let snapshot = codexRateLimits,
+               snapshot.accountKey != usage.account?.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+                codexGeneration += 1
+                codexRateLimits = nil
+                lastLimitsAttempt = nil
+                limitHealth[.codex] = RefreshHealth(error: "Account changed. Waiting for fresh limits.")
+            }
+            historyHealth[provider, default: RefreshHealth()].lastSuccess = Date()
+            historyHealth[provider, default: RefreshHealth()].error = usage.historyNotice
             setState(ProviderState(status: .connected, usage: usage), for: provider)
             return true
         } catch CodexAppServerError.notSignedIn where provider == .codex {
+            guard generation == codexGeneration else { return false }
+            codexGeneration += 1
+            codexRateLimits = nil
             setState(.disconnected, for: provider)
+            historyHealth[provider, default: RefreshHealth()].error = CodexAppServerError.notSignedIn.localizedDescription
             return false
         } catch UsageServiceError.unavailable(let reason) {
+            guard provider != .codex || generation == codexGeneration else { return false }
+            historyHealth[provider, default: RefreshHealth()].error = reason
             setState(ProviderState(status: .unavailable(reason), usage: nil), for: provider)
             return false
         } catch {
+            guard provider != .codex || generation == codexGeneration else { return false }
+            historyHealth[provider, default: RefreshHealth()].error = Self.errorMessage(error)
             setStatus(.failed(Self.errorMessage(error)), for: provider)
             return false
         }
@@ -342,6 +486,19 @@ extension UsageStore {
         }
 
         lastRefreshed = Date().addingTimeInterval(-120)
+        codexRateLimits = CodexLimitSnapshot(account: ProviderAccount(email: "demo@example.com", planName: "plus"),
+            limits: [CodexRateLimit(usedPercent: 42, windowDurationMinutes: 300,
+                                   resetsAt: Date().addingTimeInterval(7_200))],
+            receivedAt: Date().addingTimeInterval(-25))
+        claudeRateLimits = ClaudeRateLimitSnapshot(receivedAt: Date().addingTimeInterval(-40).timeIntervalSince1970,
+            valuesChangedAt: Date().addingTimeInterval(-40).timeIntervalSince1970,
+            fiveHour: .init(usedPercent: 81, resetsAt: Date().addingTimeInterval(6_000).timeIntervalSince1970),
+            sevenDay: .init(usedPercent: 35, resetsAt: Date().addingTimeInterval(86_400).timeIntervalSince1970))
+        for provider in AIProvider.allCases {
+            historyHealth[provider] = RefreshHealth(lastAttempt: lastRefreshed, lastSuccess: lastRefreshed)
+            limitHealth[provider] = RefreshHealth(lastAttempt: Date(), lastSuccess: Date().addingTimeInterval(-40))
+        }
+        hasRecentActivity = true
     }
 }
 #endif
