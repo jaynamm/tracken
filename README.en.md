@@ -514,6 +514,26 @@ tracken/
 
 The app uses SwiftUI, Swift Charts, Observation, Swift Concurrency, Foundation, AppKit, and UserNotifications. Security/Keychain Services supports legacy API key management.
 
+### Personal settings and secret protection
+
+Shared Xcode settings build with ad-hoc signing and no developer team ID. To sign with your own Apple developer account, copy the example and replace `YOUR_TEAM_ID` with your value:
+
+```bash
+cp Configuration/Signing.xcconfig.example Configuration/Signing.local.xcconfig
+```
+
+The build loads `Signing.local.xcconfig` automatically, but Git ignores it. Environment files, credential files, private keys and certificates, `.codex/`, `.claude/`, `.local/`, and `local-data/` are also ignored. Put temporary copies of usage records or diagnostics in `local-data/` when they must live inside the repository. Use sample data in README images and tests.
+
+Install Gitleaks and enable the repository hook to scan before committing. Set this up once in each clone. If you already use custom hooks, add `Scripts/check-secrets.sh --staged` to your existing hook instead.
+
+```bash
+brew install gitleaks
+git config --local core.hooksPath .githooks
+./Scripts/check-secrets.sh --history
+```
+
+The hook scans staged changes and stops the commit if Gitleaks is missing or finds a secret. GitHub's **Secret scan** also scans the full Git history on pushes and pull requests. Secret values are redacted from scanner output. `.gitignore` does not remove tracked files or earlier commits, and the GitHub check runs after a push. An exposed key requires revocation or replacement and a separate history cleanup.
+
 ### Regression tests
 
 Run from the repository root. Tests use temporary files and response fixtures without real accounts or API keys.

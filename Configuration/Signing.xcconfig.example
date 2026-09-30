@@ -1,0 +1,4 @@
+// Copy to Signing.local.xcconfig and enter your own Apple developer team ID.
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = YOUR_TEAM_ID

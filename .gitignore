@@ -3,3 +3,32 @@ xcuserdata/
 DerivedData/
 .DS_Store
 __pycache__/
+
+# Machine-local settings and credentials
+.env
+.env.*
+!.env.example
+*.local.xcconfig
+.codex/
+.claude/
+.local/
+local-data/
+secrets/
+auth.json
+credentials.json
+.credentials.json
+
+# Signing credentials and private keys
+*.p12
+*.pfx
+*.pem
+*.key
+*.mobileprovision
+*.provisionprofile
+id_rsa
+id_ed25519
+
+# Local usage exports, bridge backups, and diagnostic output
+rate-limits.json
+settings-before-*.json
+*.log

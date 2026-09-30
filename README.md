@@ -516,6 +516,26 @@ tracken/
 
 SwiftUI, Swift Charts, Observation, Swift Concurrency, Foundation, AppKit, UserNotifications를 사용합니다. Security/Keychain Services는 구버전 API 키 관리에 사용합니다.
 
+### 개인 설정과 비밀정보 보호
+
+공유 Xcode 설정은 개발자 팀 ID 없이 ad-hoc 서명으로 빌드합니다. 개인 Apple 개발자 계정으로 서명하려면 다음 파일을 복사하고 `YOUR_TEAM_ID`를 본인의 값으로 바꿉니다.
+
+```bash
+cp Configuration/Signing.xcconfig.example Configuration/Signing.local.xcconfig
+```
+
+`Signing.local.xcconfig`는 빌드 시 자동으로 읽지만 Git에서는 제외합니다. `.env` 파일, 인증 파일, 개인 키·인증서, `.codex/`, `.claude/`, `.local/`, `local-data/`도 제외합니다. 사용 기록이나 진단 자료를 저장소 안에 임시로 복사해야 한다면 `local-data/`를 사용하세요. README 이미지와 테스트에는 예시 데이터만 사용합니다.
+
+커밋 전 비밀정보 검사를 활성화하려면 Gitleaks를 설치하고 저장소 훅을 설정합니다. 이 설정은 각 clone에서 한 번 필요합니다. 이미 자체 훅을 사용 중이라면 기존 훅에 `Scripts/check-secrets.sh --staged` 호출을 추가하세요.
+
+```bash
+brew install gitleaks
+git config --local core.hooksPath .githooks
+./Scripts/check-secrets.sh --history
+```
+
+훅은 스테이징된 변경을 검사하며, Gitleaks가 없거나 비밀정보를 발견하면 커밋을 중단합니다. GitHub의 **Secret scan**도 push와 pull request에서 전체 Git 기록을 검사합니다. 검사 출력에는 비밀값을 숨깁니다. `.gitignore`는 이미 추적 중인 파일이나 과거 커밋을 제거하지 않으며, GitHub 검사는 push 이후에 실행됩니다. 실제 키가 노출되었다면 키 폐기·재발급과 과거 기록 정리가 별도로 필요합니다.
+
 ### 회귀 테스트
 
 저장소 루트에서 실행합니다. 실제 계정·API 키 없이 임시 파일과 응답 fixture로 검증합니다.
