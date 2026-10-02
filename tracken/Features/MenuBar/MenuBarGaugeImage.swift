@@ -69,8 +69,9 @@ import AppKit
                         NSColor.black.setFill()
                         let fill = NSRect(x: track.minX, y: track.minY,
                                           width: track.width * percent / 100, height: track.height)
-                        NSBezierPath(roundedRect: fill, xRadius: min(radius, fill.width / 2),
-                                     yRadius: radius).fill()
+                        // Round only the fixed track. Rounding a short fill again
+                        // turns low usage into an oval that looks thinner.
+                        fill.fill()
                         NSGraphicsContext.restoreGraphicsState()
                     }
                 } else {
