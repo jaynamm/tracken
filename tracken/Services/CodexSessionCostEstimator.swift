@@ -301,6 +301,7 @@ nonisolated private struct UsageAccumulator {
         cachedInputTokens += cached
         cacheWriteInputTokens += cacheWrite
 
+        // shortcut: Codex omits cache TTL; use 30m writes until per-TTL counts are available.
         guard usage.effectiveTotalTokens == input + output,
               let cost = price?.cost(input: uncached, cached: cached, write: cacheWrite,
                                      output: output, contextTokens: input) else {

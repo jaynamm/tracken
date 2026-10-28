@@ -160,6 +160,17 @@ private actor SettingsPricingFixture {
         try expect(result.first(where: { $0.date == day })?.estimatedCostUSD == nil,
                    "Unknown rates must not produce a partial total disguised as a full estimate")
         try expect(TokenUsage.completeEstimatedCost(for: [known, unknown]) == nil, "Unknown aggregate price")
+        let partial = CodexAppServerClient.merge(officialDaily: [DailyUsage(date: day, totalTokens: 140)],
+                                                localEstimates: [day: [known]])
+        try expect(partial.first?.totalTokens == 140 && partial.first?.estimatedCostUSD == nil
+                   && partial.first?.knownEstimatedCostUSD == 0.5 && partial.first?.isPartialCostEstimate == true,
+                   "Priced device history cannot masquerade as the cost of the larger account total")
+        let complete = CodexAppServerClient.merge(officialDaily: [DailyUsage(date: day, totalTokens: 70)],
+                                                 localEstimates: [day: [known]])
+        try expect(complete.first?.estimatedCostUSD == 0.5 && complete.first?.isPartialCostEstimate == false,
+                   "Matching local and account totals retain a complete cost estimate")
+        try expect(result.first(where: { $0.date == next })?.estimatedCostUSD == 0.5,
+                   "Local-only days retain a complete estimate when all their models are priced")
         let data = Data(#"{"rateLimits":{"primary":{"usedPercent":90,"windowDurationMins":300}},"rateLimitsByLimitId":{"codex":{"primary":{"usedPercent":14,"windowDurationMins":10080}}}}"#.utf8)
         let limits = try JSONDecoder().decode(RateLimitsResponse.self, from: data)
         try expect(limits.codexLimits?.primary?.usedPercent == 14, "Prefer the current Codex bucket")

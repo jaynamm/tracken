@@ -253,6 +253,23 @@
         }
       }
     },
+    "12h cache write %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12h cache write %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12시간 캐시 쓰기 %@"
+          }
+        }
+      }
+    },
     "14d": {
       "extractionState": "manual",
       "localizations": {
@@ -553,6 +570,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "기본 단가 확인: %@"
+          }
+        }
+      }
+    },
+    "Cache read %@ · 30m write %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache read %@ · 30m write %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캐시 읽기 %@ · 30분 쓰기 %@"
           }
         }
       }
@@ -2034,6 +2068,57 @@
         }
       }
     },
+    "Long 12h cache write %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long 12h cache write %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "긴 문맥 12시간 캐시 쓰기 %@"
+          }
+        }
+      }
+    },
+    "Long 1h cache write %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long 1h cache write %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "긴 문맥 1시간 캐시 쓰기 %@"
+          }
+        }
+      }
+    },
+    "Long cache read %@ · 30m write %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long cache read %@ · 30m write %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "긴 문맥 캐시 읽기 %@ · 30분 쓰기 %@"
+          }
+        }
+      }
+    },
     "Long cache read %@ · Write %@": {
       "extractionState": "manual",
       "localizations": {
@@ -2590,6 +2675,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "출력 %@"
+          }
+        }
+      }
+    },
+    "Over %@ input: %@ input · %@ output": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Over %@ input: %@ input · %@ output"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "입력 %@ 초과: 입력 %@ · 출력 %@"
           }
         }
       }

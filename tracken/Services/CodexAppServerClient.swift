@@ -144,9 +144,11 @@ final class CodexAppServerClient: CodexUsageProviding {
 
         for (rawDate, models) in localEstimates {
             let date = calendar.startOfDay(for: rawDate)
-            let estimatedCost = TokenUsage.completeEstimatedCost(for: models)
+            let localTokens = models.reduce(0) { $0 + $1.totalTokens }
             let totalTokens = dailyByDate[date]?.totalTokens
-                ?? models.reduce(0) { $0 + $1.totalTokens }
+                ?? localTokens
+            // Device history may cover only part of the account's daily usage.
+            let estimatedCost = localTokens == totalTokens ? TokenUsage.completeEstimatedCost(for: models) : nil
             dailyByDate[date] = DailyUsage(
                 date: date,
                 totalTokens: totalTokens,

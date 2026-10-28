@@ -52,13 +52,30 @@ struct PricingSettingsView: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(model).font(.caption.weight(.semibold))
                                     Text("Input \(rate(price.input)) · Output \(rate(price.output))")
-                                    Text("Cache read \(rate(price.cachedInput)) · Write \(rate(price.cacheWrite))")
+                                    if price.cacheWrite12h != nil {
+                                        Text("Cache read \(rate(price.cachedInput)) · 30m write \(rate(price.cacheWrite))")
+                                    } else {
+                                        Text("Cache read \(rate(price.cachedInput)) · Write \(rate(price.cacheWrite))")
+                                    }
                                     if let oneHour = price.cacheWrite1h {
                                         Text("1h cache write \(rate(oneHour))")
                                     }
+                                    if let twelveHours = price.cacheWrite12h {
+                                        Text("12h cache write \(rate(twelveHours))")
+                                    }
                                     if let long = price.longContext {
-                                        Text("Over 272K input: \(rate(long.input)) input · \(rate(long.output)) output")
-                                        Text("Long cache read \(rate(long.cachedInput)) · Write \(rate(long.cacheWrite))")
+                                        Text("Over \(Format.compactTokens(price.longContextThreshold ?? 272_000)) input: \(rate(long.input)) input · \(rate(long.output)) output")
+                                        if long.cacheWrite12h != nil {
+                                            Text("Long cache read \(rate(long.cachedInput)) · 30m write \(rate(long.cacheWrite))")
+                                        } else {
+                                            Text("Long cache read \(rate(long.cachedInput)) · Write \(rate(long.cacheWrite))")
+                                        }
+                                        if let twelveHours = long.cacheWrite12h {
+                                            Text("Long 12h cache write \(rate(twelveHours))")
+                                        }
+                                        if let oneHour = long.cacheWrite1h {
+                                            Text("Long 1h cache write \(rate(oneHour))")
+                                        }
                                     }
                                 }
                                 .font(.caption2)

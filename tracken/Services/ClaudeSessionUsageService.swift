@@ -160,7 +160,8 @@ nonisolated private struct ClaudeTokenUsage: Decodable {
         if olderModel && inputTokens + cacheRead + cacheWrite > 200_000 { return nil }
         guard let cost = prices.rate(for: model)?.cost(
             input: inputTokens, cached: cacheRead, write: cacheWrite - cacheWrite1h,
-            write1h: cacheWrite1h, output: outputTokens) else { return nil }
+            write1h: cacheWrite1h, output: outputTokens,
+            contextTokens: inputTokens + cacheRead + cacheWrite) else { return nil }
         let geoMultiplier = inferenceGeo == "us" ? 1.1 : 1.0
         return cost * geoMultiplier
     }

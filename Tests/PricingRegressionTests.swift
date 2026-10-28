@@ -25,16 +25,49 @@ private actor PricingHTTPFixture {
         let openAI = try OfficialPricingParser.parse(PricingDefaults.openAI + "\n### Batch pricing data\n| invalid |", provider: .codex)
         let claude = try OfficialPricingParser.parse(PricingDefaults.claude, provider: .anthropic)
         let fixtureURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/claude-pricing-2026-09-29.md")
+            .appendingPathComponent("Fixtures/claude-pricing-2026-10-28.md")
         let officialClaudeText = try String(contentsOf: fixtureURL, encoding: .utf8)
         let officialClaude = try OfficialPricingParser.parse(officialClaudeText, provider: .anthropic)
-        try checkPrice(officialClaude.count == 19 && officialClaude == claude,
+        let officialOpenAIText = try String(contentsOf: fixtureURL.deletingLastPathComponent()
+            .appendingPathComponent("openai-pricing-2026-10-28.md"), encoding: .utf8)
+        let officialOpenAI = try OfficialPricingParser.parse(officialOpenAIText, provider: .codex)
+        try checkPrice(officialOpenAI == openAI && openAI.count == 38,
+                       "Bundled OpenAI prices match all standard tables in the actual Markdown response")
+        try checkPrice(openAI["gpt-6.1-sol"]?.input == 2 && openAI["gpt-6.1-sol"]?.cachedInput == 0.1
+                       && openAI["gpt-6.1-terra"]?.output == 5 && openAI["gpt-6-luna"]?.input == 0.1
+                       && openAI["gpt-5.3-codex"]?.input == 1.75,
+                       "Current models and specialized Codex standard prices exclude Batch, Fast and Ultrafast")
+        try checkPrice(openAI["gpt-6.1-sol"]?.cacheWrite == 2.5
+                       && openAI["gpt-6.1-sol"]?.cacheWrite12h == 5
+                       && openAI["gpt-6.1-sol"]?.longContext?.cacheWrite12h == 10,
+                       "Distinct 30-minute and 12-hour cache prices retain the official units")
+        let legacyOpenAI = """
+        ### Standard pricing data
+        | Model | Short context input | Short context cached input | Short context cache writes | Short context output | Long context input | Long context cached input | Long context cache writes | Long context output |
+        | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+        | gpt-6-astra | $10.00 | $1.00 | $12.50 | $50.00 | $20.00 | $2.00 | $25.00 | $75.00 |
+        """
+        let legacyRate = try OfficialPricingParser.parse(legacyOpenAI, provider: .codex)["gpt-6-astra"]
+        try checkPrice(legacyRate?.input == 10 && legacyRate?.output == 50
+                       && legacyRate?.longContext?.cachedInput == 2 && legacyRate?.cacheWrite12h == nil,
+                       "Previously published column order remains supported")
+        try checkPrice(officialClaude.count == 20 && officialClaude == claude,
                        "Bundled Claude prices match the raw official Markdown table, excluding Batch prices")
         try checkPrice(officialClaude["claude-opus-5-5"] == TokenPrice(input: 4, cachedInput: 0.2, cacheWrite: 5,
                                                                      output: 20, cacheWrite1h: 8)
                        && officialClaude["claude-sonnet-5-5"]?.input == 2
+                       && officialClaude["claude-sonnet-5-5"]?.cachedInput == 0.1
                        && officialClaude["claude-sonnet-5"]?.output == 10,
                        "Numeric HTML footnotes on input, output and cache rates preserve the latest prices")
+        let haiku = officialClaude["claude-haiku-5-5"]!
+        try checkPrice(haiku.longContextThreshold == 100_000 && haiku.longContext?.input == 0.5
+                       && haiku.longContext?.cacheWrite1h == 1
+                       && abs(haiku.cost(input: 100_000, cached: 0, write: 0, output: 0, contextTokens: 100_000)! - 0.01) < 1e-10
+                       && abs(haiku.cost(input: 100_001, cached: 0, write: 0, output: 0, contextTokens: 100_001)! - 0.0500005) < 1e-10,
+                       "Haiku's two rows form one model with the exact 100K context boundary")
+        let oldCache = try JSONDecoder().decode(TokenPrice.self, from: Data(#"{"input":4,"cachedInput":0.4,"cacheWrite":5,"output":20}"#.utf8))
+        try checkPrice(oldCache.longContextThreshold == nil && oldCache.cacheWrite12h == nil && oldCache.input == 4,
+                       "Existing saved catalogs remain decodable after adding cache lifetimes and thresholds")
         let flattened = officialClaudeText.replacingOccurrences(of: "<sup>", with: "")
             .replacingOccurrences(of: "</sup>", with: "")
         try checkPrice(try OfficialPricingParser.parse(flattened, provider: .anthropic) == officialClaude,
@@ -52,6 +85,11 @@ private actor PricingHTTPFixture {
         try checkPrice(snapshot.rate(for: "gpt-5.6-sol-2026-09-01") != nil && snapshot.rate(for: "gpt-5.6-sol-pro") == nil,
                        "Only dated aliases inherit model rates")
         for broken in ["<html>blocked</html>", PricingDefaults.openAI.replacingOccurrences(of: "$4.00", with: "$NaN"),
+                       officialOpenAIText.replacingOccurrences(of: "Short context output", with: "Price per 1000 tokens"),
+                       officialOpenAIText.replacingOccurrences(of: "| gpt-6.1-sol | $2.00 |", with: "| gpt-6.1-sol | - |"),
+                       officialOpenAIText.replacingOccurrences(of: "$0.125", with: "$NaN"),
+                       officialClaudeText.components(separatedBy: .newlines)
+                           .filter { !$0.contains("Claude Haiku 5.5 (for prompts over") }.joined(separator: "\n"),
                        PricingDefaults.claude.replacingOccurrences(of: "Base input tokens", with: "Price per 1000 tokens"),
                        officialClaudeText.replacingOccurrences(of: "<sup>1</sup>", with: "<sup>unknown</sup>"),
                        officialClaudeText.replacingOccurrences(of: "$4 / MTok", with: "$4 / KTok"),
@@ -66,6 +104,7 @@ private actor PricingHTTPFixture {
         defer { try? FileManager.default.removeItem(at: root) }
         let http = PricingHTTPFixture()
         let catalog = PricingCatalog(directory: root, fetch: { await http.fetch($0) })
+        await http.set(status: 200, document: officialOpenAIText)
         // Past test times keep the on-disk cache valid when a new actor reloads it.
         let start = Date().addingTimeInterval(-200_000)
         _ = await catalog.refresh(.codex, now: start)
@@ -129,6 +168,14 @@ private actor PricingHTTPFixture {
                                      rates: ["claude-sonnet-5": TokenPrice(input: 4, cachedInput: 0.2, cacheWrite: 2.5, output: 10)])
         let claudeUsage = try ClaudeSessionUsageService.loadUsage(at: session, now: now, prices: prices)
         try checkPrice(abs((claudeUsage.estimatedCostUSD ?? -1) - 0.4) < 1e-10, "Claude estimator consumes refreshed catalog")
+        let haikuLine = """
+        {"type":"assistant","timestamp":"\(stamp)","message":{"id":"haiku","model":"claude-haiku-5-5","usage":{"input_tokens":10000,"cache_read_input_tokens":90000,"cache_creation_input_tokens":100,"cache_creation":{"ephemeral_1h_input_tokens":100},"output_tokens":100}}}
+        """
+        try haikuLine.write(to: session.appendingPathComponent("haiku.jsonl"), atomically: true, encoding: .utf8)
+        let haikuUsage = try ClaudeSessionUsageService.loadUsage(at: session, now: now, prices: .bundled(for: .anthropic))
+            .modelUsage.first { $0.modelName == "claude-haiku-5-5" }
+        try checkPrice(abs((haikuUsage?.estimatedCostUSD ?? -1) - 0.00985) < 1e-10,
+                       "Claude context length includes reads and writes, and long-context 1h writes use their own rate")
     }
 
     private static func checkDays() throws {

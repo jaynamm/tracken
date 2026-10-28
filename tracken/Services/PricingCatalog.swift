@@ -7,34 +7,41 @@ nonisolated struct TokenPrice: Codable, Equatable, Sendable {
     let cacheWrite: Double?
     let output: Double
     var cacheWrite1h: Double? = nil
+    var cacheWrite12h: Double? = nil
     var longContext: ContextPrice? = nil
+    var longContextThreshold: Int? = nil
 
     struct ContextPrice: Codable, Equatable, Sendable {
         let input: Double
         let cachedInput: Double?
         let cacheWrite: Double?
         let output: Double
+        var cacheWrite12h: Double? = nil
+        var cacheWrite1h: Double? = nil
     }
 
     func cost(input: Int, cached: Int, write: Int, write1h: Int = 0,
               output: Int, contextTokens: Int = 0) -> Double? {
-        let long = contextTokens > 272_000 ? longContext : nil
+        let long = contextTokens > (longContextThreshold ?? 272_000) ? longContext : nil
         let inputRate = long?.input ?? self.input
         let outputRate = long?.output ?? self.output
         let readRate = long == nil ? cachedInput : long?.cachedInput
         let writeRate = long == nil ? cacheWrite : long?.cacheWrite
+        let write1hRate = long == nil ? cacheWrite1h : long?.cacheWrite1h
         guard cached == 0 || readRate != nil,
               write == 0 || writeRate != nil,
-              write1h == 0 || cacheWrite1h != nil else { return nil }
+              write1h == 0 || write1hRate != nil else { return nil }
         return (Double(input) * inputRate + Double(cached) * (readRate ?? 0)
-                + Double(write) * (writeRate ?? 0) + Double(write1h) * (cacheWrite1h ?? 0)
+                + Double(write) * (writeRate ?? 0) + Double(write1h) * (write1hRate ?? 0)
                 + Double(output) * outputRate) / 1_000_000
     }
 
     var isValid: Bool {
-        let values = [input, cachedInput, cacheWrite, output, cacheWrite1h,
-                      longContext?.input, longContext?.cachedInput, longContext?.cacheWrite, longContext?.output]
-        return values.compactMap { $0 }.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 10_000 }
+        let values = [input, cachedInput, cacheWrite, output, cacheWrite1h, cacheWrite12h,
+                      longContext?.input, longContext?.cachedInput, longContext?.cacheWrite, longContext?.output,
+                      longContext?.cacheWrite12h, longContext?.cacheWrite1h]
+        return (longContextThreshold.map { $0 > 0 } ?? true)
+            && values.compactMap { $0 }.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 10_000 }
     }
 }
 
@@ -63,7 +70,7 @@ nonisolated struct PricingSnapshot: Codable, Equatable, Sendable {
     static func bundled(for provider: AIProvider) -> PricingSnapshot {
         let text = provider == .codex ? PricingDefaults.openAI : PricingDefaults.claude
         return PricingSnapshot(providerID: provider.rawValue,
-                               checkedAt: Date(timeIntervalSince1970: provider == .codex ? 1_788_739_200 : 1_790_640_000),
+                               checkedAt: Date(timeIntervalSince1970: 1_793_145_600),
                                isBundled: true,
                                rates: (try? OfficialPricingParser.parse(text, provider: provider)) ?? [:])
     }
@@ -83,14 +90,13 @@ nonisolated enum PricingError: Error, LocalizedError {
 /// Strictly reads the standard text-token table, excluding Batch/Fast/tool tables.
 nonisolated enum OfficialPricingParser {
     static func parse(_ text: String, provider: AIProvider) throws -> [String: TokenPrice] {
-        let heading = provider == .codex ? "### Standard pricing data" : "## Model pricing"
+        if provider == .codex { return try parseOpenAI(text) }
+        let heading = "## Model pricing"
         let lines = text.components(separatedBy: .newlines)
         guard let start = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == heading }) else {
             throw PricingError.invalidDocument
         }
-        let expected = provider == .codex
-            ? ["Model", "Short context input", "Short context cached input", "Short context cache writes", "Short context output", "Long context input", "Long context cached input", "Long context cache writes", "Long context output"]
-            : ["Model", "Base input tokens", "5m cache writes", "1h cache writes", "Cache hits and refreshes", "Output tokens"]
+        let expected = ["Model", "Base input tokens", "5m cache writes", "1h cache writes", "Cache hits and refreshes", "Output tokens"]
         var foundHeader = false
         var rates: [String: TokenPrice] = [:]
         for line in lines.dropFirst(start + 1) {
@@ -112,35 +118,103 @@ nonisolated enum OfficialPricingParser {
             if cells.allSatisfy({ !$0.isEmpty && $0.allSatisfy { "-: ".contains($0) } }) { continue }
             guard cells.count == expected.count else { throw PricingError.invalidDocument }
             let key: String
-            let price: TokenPrice
-            if provider == .codex {
-                key = cells[0].components(separatedBy: " (")[0].lowercased()
-                let values = try cells.dropFirst().map { try amount($0, claude: false) }
-                guard let input = values[0], let output = values[3] else { throw PricingError.invalidDocument }
-                var long: TokenPrice.ContextPrice?
-                if values[4...].contains(where: { $0 != nil }) {
-                    guard let longInput = values[4], let longOutput = values[7] else { throw PricingError.invalidDocument }
-                    long = .init(input: longInput, cachedInput: values[5], cacheWrite: values[6], output: longOutput)
-                }
-                price = TokenPrice(input: input, cachedInput: values[1], cacheWrite: values[2], output: output, longContext: long)
-            } else {
-                let name = cells[0].components(separatedBy: " (")[0].lowercased()
-                guard name.range(of: #"^claude [a-z]+ [0-9]+(\.[0-9]+)?$"#, options: .regularExpression) != nil else {
-                    throw PricingError.invalidDocument
-                }
-                key = name.replacingOccurrences(of: " ", with: "-").replacingOccurrences(of: ".", with: "-")
-                let values = try cells.dropFirst().map { try amount($0, claude: true) }
-                guard let input = values[0], let output = values[4], values.allSatisfy({ $0 != nil }) else {
-                    throw PricingError.invalidDocument
-                }
-                price = TokenPrice(input: input, cachedInput: values[3], cacheWrite: values[1], output: output, cacheWrite1h: values[2])
+            var price: TokenPrice
+            let name = cells[0].components(separatedBy: " (")[0].lowercased()
+            guard name.range(of: #"^claude [a-z]+ [0-9]+(\.[0-9]+)?$"#, options: .regularExpression) != nil else {
+                throw PricingError.invalidDocument
+            }
+            key = name.replacingOccurrences(of: " ", with: "-").replacingOccurrences(of: ".", with: "-")
+            let values = try cells.dropFirst().map { try amount($0, claude: true) }
+            guard let input = values[0], let output = values[4], values.allSatisfy({ $0 != nil }) else {
+                throw PricingError.invalidDocument
+            }
+            price = TokenPrice(input: input, cachedInput: values[3], cacheWrite: values[1], output: output, cacheWrite1h: values[2])
+            if cells[0].hasSuffix(" (for prompts up to 100,000 tokens)") {
+                price.longContextThreshold = 100_000
+            } else if cells[0].hasSuffix(" (for prompts over 100,000 tokens)") {
+                guard var base = rates[key], base.longContextThreshold == 100_000,
+                      base.longContext == nil, price.isValid else { throw PricingError.invalidDocument }
+                base.longContext = .init(input: input, cachedInput: values[3], cacheWrite: values[1],
+                                         output: output, cacheWrite1h: values[2])
+                rates[key] = base
+                continue
             }
             guard key.range(of: #"^[a-z0-9][a-z0-9.-]+$"#, options: .regularExpression) != nil,
                   price.isValid, rates[key] == nil else { throw PricingError.invalidDocument }
             rates[key] = price
         }
-        guard !rates.isEmpty else { throw PricingError.invalidDocument }
+        guard !rates.isEmpty, rates.values.allSatisfy({ $0.longContextThreshold == nil || $0.longContext != nil }) else {
+            throw PricingError.invalidDocument
+        }
         return rates
+    }
+
+    private static func parseOpenAI(_ text: String) throws -> [String: TokenPrice] {
+        let lines = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let start = lines.firstIndex(of: "### Standard pricing data") else { throw PricingError.invalidDocument }
+        var rates: [String: TokenPrice] = [:]
+        try readTable(lines.dropFirst(start + 1).prefix { !$0.hasPrefix("#") }, grouped: false)
+        guard !rates.isEmpty else { throw PricingError.invalidDocument }
+
+        // Codex-specific models live in a separate Standard table, followed by Fast prices.
+        if let specialized = lines.firstIndex(of: "Specialized models"),
+           let standard = lines[specialized...].firstIndex(of: "Standard"),
+           let grouped = lines[standard...].firstIndex(of: "### Grouped Pricing Table data") {
+            try readTable(lines.dropFirst(grouped + 1).prefix { !$0.hasPrefix("#") }, grouped: true)
+        }
+        return rates
+
+        func readTable(_ section: ArraySlice<String>, grouped: Bool) throws {
+            var columns: [String] = []
+            let basic = ["Model", "Input", "Output", "Cached input"]
+            let legacy = ["Model", "Short context input", "Short context cached input", "Short context cache writes", "Short context output", "Long context input", "Long context cached input", "Long context cache writes", "Long context output"]
+            let current = ["Model", "Short context input", "Short context output", "Short context cached input", "Short context 30m write", "Short context 12h write", "Long context input", "Long context output", "Long context cached input", "Long context 30m write", "Long context 12h write"]
+            for line in section where line.hasPrefix("|") {
+                let cells = line.split(separator: "|", omittingEmptySubsequences: false).dropFirst().dropLast()
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                if cells.first == (grouped ? "Category" : "Model") {
+                    let supported = grouped ? [["Category"] + basic] : [basic, legacy, current]
+                    guard supported.contains(where: { Set($0) == Set(cells) && $0.count == cells.count }) else {
+                        throw PricingError.invalidDocument
+                    }
+                    columns = cells
+                    continue
+                }
+                if cells.allSatisfy({ !$0.isEmpty && $0.allSatisfy { "-: ".contains($0) } }) { continue }
+                guard !columns.isEmpty, cells.count == columns.count else { throw PricingError.invalidDocument }
+                let row = Dictionary(uniqueKeysWithValues: zip(columns, cells))
+                if grouped && row["Category"] != "Codex" { continue }
+                let key = row["Model"]!.components(separatedBy: " (")[0].lowercased()
+                func value(_ name: String) throws -> Double? {
+                    guard let cell = row[name] else { return nil }
+                    return try amount(cell, claude: false)
+                }
+                let prefix = row["Short context input"] == nil ? "" : "Short context "
+                let inputName = prefix.isEmpty ? "Input" : prefix + "input"
+                let outputName = prefix.isEmpty ? "Output" : prefix + "output"
+                let cachedName = prefix.isEmpty ? "Cached input" : prefix + "cached input"
+                guard let input = try value(inputName), let output = try value(outputName) else {
+                    throw PricingError.invalidDocument
+                }
+                var price = try TokenPrice(input: input, cachedInput: value(cachedName),
+                                           cacheWrite: value(prefix + "30m write") ?? value(prefix + "cache writes"),
+                                           output: output, cacheWrite12h: value(prefix + "12h write"))
+                let longInput = try value("Long context input")
+                let longOutput = try value("Long context output")
+                let longCached = try value("Long context cached input")
+                let longWrite = try value("Long context 30m write") ?? value("Long context cache writes")
+                let longWrite12h = try value("Long context 12h write")
+                if [longInput, longOutput, longCached, longWrite, longWrite12h].contains(where: { $0 != nil }) {
+                    guard let longInput, let longOutput else { throw PricingError.invalidDocument }
+                    price.longContext = .init(input: longInput, cachedInput: longCached, cacheWrite: longWrite,
+                                              output: longOutput, cacheWrite12h: longWrite12h)
+                }
+                guard key.range(of: #"^[a-z0-9][a-z0-9.-]+$"#, options: .regularExpression) != nil,
+                      price.isValid, rates[key] == nil else { throw PricingError.invalidDocument }
+                rates[key] = price
+            }
+            guard !columns.isEmpty else { throw PricingError.invalidDocument }
+        }
     }
 
     private static func amount(_ cell: String, claude: Bool) throws -> Double? {

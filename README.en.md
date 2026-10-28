@@ -363,9 +363,9 @@ To uninstall from that configuration, combine `--config-dir` with `--uninstall`.
 
 Costs are USD estimates that apply **the currently saved standard API rates** to the model and tokens recorded in each session. Today's value is recorded usage so far, not an end-of-day forecast.
 
-- Codex prioritizes account daily token totals and fills dates absent from the server using local records. Costs and per-model details come from saved session metadata on this Mac within the selected range. Lifetime token increases are not arbitrarily assigned to today.
-- Claude uses ordinary input, cache reads, cache creation, and output. Displayed input totals include cache tokens, while costs apply the separate rate for each category. Cache writes distinguish 5-minute and 1-hour durations.
-- Codex applies long-context prices above 272K input tokens when the table provides them. It does not reproduce actual Fast or Batch billing rates.
+- Codex prioritizes account daily token totals and fills dates absent from the server using local records. Costs and per-model details come from saved session metadata on this Mac within the selected range. If local and account daily token totals differ, costs are marked as partial. Lifetime token increases are not arbitrarily assigned to today.
+- Claude uses ordinary input, cache reads, cache creation, and output. Displayed input totals include cache tokens, while costs apply the separate rate for each category. Cache writes distinguish 5-minute and 1-hour durations. Haiku 5.5 uses long-context rates when ordinary input plus cache reads and writes exceeds 100K tokens.
+- Codex applies long-context prices above 272K input tokens when the table provides them. Local records omit cache lifetime, so cache writes use the 30-minute rate. It does not reproduce actual Fast or Batch billing rates.
 - Unsupported Claude pricing modes, unknown models, and some older models' requests above 200K input tokens remain unpriced. Records with US inference geography (`inference_geo=us`) use the implemented 1.1× multiplier.
 - Tool fees, taxes, subscriptions, and negotiated contracts are excluded. Past dates are recalculated when prices change and may differ from historical bills.
 
@@ -387,7 +387,7 @@ Costs are USD estimates that apply **the currently saved standard API rates** to
 
 Sources are the [official OpenAI price table](https://developers.openai.com/api/docs/pricing.md) and [official Anthropic price table](https://platform.claude.com/docs/en/about-claude/pricing). The parser validates standard text-token tables and excludes separate Fast and Batch tables. New models are picked up when added in the supported table format. Dated model snapshots can inherit a base model's rate; arbitrary new suffixes do not receive a guessed price.
 
-Claude numeric footnotes such as `MTok1` and `MTok<sup>1</sup>` are supported. Bundled rates were verified on **2026-09-07 for OpenAI** and **2026-09-29 for Claude**. The bundled Claude table contains **19 models, including Opus 5.5 and Sonnet 5.5**. These describe the bundled snapshot; online rates and model counts may change later.
+Claude numeric footnotes such as `MTok1` and `MTok<sup>1</sup>` are supported. OpenAI supports reordered input/output columns, split standard model tables, the separate Codex table, and 30-minute/12-hour cache-write prices. Bundled rates were verified on **2026-10-28 for OpenAI** and **2026-10-28 for Claude**. The bundled OpenAI table contains **38 models, including GPT-6.1 Sol and Terra**; the Claude table contains **20 models, including Opus 5.5, Sonnet 5.5 and Haiku 5.5**. These describe the bundled snapshot; online rates and model counts may change later.
 
 If downloading, validation, or saving fails, the app retains the previous prices and verification time and displays an error. If no valid disk cache exists, it uses bundled prices.
 
@@ -549,7 +549,7 @@ Run from the repository root. Tests use temporary files and response fixtures wi
 ./Scripts/test-usage.sh
 ```
 
-Coverage includes calendar/time-zone aggregation, deduplication, resumed sessions, partial costs, both Codex windows and weekly-only responses, Claude bridge installation/restoration, menu bar quota selection/layout caching/preference persistence, hourly/adaptive scheduling and menu freshness, notification deduplication/recovery/permissions/delivery failures, pricing caches and offline fallback, repricing, official Claude HTML footnotes and 19 models, Codex historical backfill/restart persistence/date corrections/account isolation/period selection/missing dates, and Korean/English strings.
+Coverage includes calendar/time-zone aggregation, deduplication, resumed sessions, partial costs, both Codex windows and weekly-only responses, Claude bridge installation/restoration, menu bar quota selection/layout caching/preference persistence, hourly/adaptive scheduling and menu freshness, notification deduplication/recovery/permissions/delivery failures, pricing caches and offline fallback, repricing, official OpenAI split tables and 38 models, Claude HTML footnotes and 20 models, Codex historical backfill/restart persistence/date corrections/account isolation/period selection/missing dates, and Korean/English strings.
 
 The earlier build command also verifies a local Release build. `DerivedData/` is excluded from Git.
 
