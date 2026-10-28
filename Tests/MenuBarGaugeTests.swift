@@ -56,6 +56,45 @@ private struct MenuBarGaugeFailure: Error { let message: String }
         try check(MenuBarUsageGauge.claude(weeklyClaude, now: now).usedPercent == 100,
                   "Claude weekly-only and exhausted quotas must remain visible")
 
+        func claudeGauge(_ fiveHour: ClaudeRateLimitSnapshot.Window?,
+                         _ sevenDay: ClaudeRateLimitSnapshot.Window?, at date: Date) -> MenuBarUsageGauge {
+            let snapshot = ClaudeRateLimitSnapshot(receivedAt: now.timeIntervalSince1970,
+                valuesChangedAt: now.timeIntervalSince1970, fiveHour: fiveHour, sevenDay: sevenDay)
+            return .claude(snapshot, now: date)
+        }
+        let weekly = ClaudeRateLimitSnapshot.Window(usedPercent: 80,
+            resetsAt: future.addingTimeInterval(60).timeIntervalSince1970)
+        for percent in [0.0, 30, 99.9] {
+            let fiveHour = ClaudeRateLimitSnapshot.Window(usedPercent: percent,
+                resetsAt: future.timeIntervalSince1970)
+            let gauge = claudeGauge(fiveHour, weeklyClaude.sevenDay, at: now)
+            try check(gauge.usedPercent == percent && gauge.limit?.windowDurationMinutes == 300,
+                      "An active Claude 5-hour window below 100% must win even when weekly usage is 100%")
+        }
+        let exhausted = ClaudeRateLimitSnapshot.Window(usedPercent: 100,
+            resetsAt: future.timeIntervalSince1970)
+        let fallback = claudeGauge(exhausted, weekly, at: now)
+        try check(fallback.usedPercent == 80 && fallback.limit?.windowDurationMinutes == 10_080,
+                  "Claude must switch to weekly usage at exactly 100% in its 5-hour window")
+        let active = snapshot.fiveHour!
+        let expiredFallback = claudeGauge(active, weekly, at: future)
+        try check(expiredFallback.usedPercent == 80 && expiredFallback.limit?.windowDurationMinutes == 10_080,
+                  "The 5-hour window must yield to weekly usage at the exact reset boundary")
+        for unavailable in [nil, ClaudeRateLimitSnapshot.Window(usedPercent: .nan,
+                            resetsAt: future.timeIntervalSince1970)] {
+            try check(claudeGauge(unavailable, weekly, at: now).usedPercent == 80,
+                      "Missing or invalid Claude 5-hour data must fall back to weekly usage")
+        }
+        try check(claudeGauge(exhausted, nil, at: now).usedPercent == nil
+                  && claudeGauge(exhausted, snapshot.sevenDay, at: now).usedPercent == nil
+                  && claudeGauge(active, weekly, at: future.addingTimeInterval(60)).usedPercent == nil,
+                  "Without an eligible weekly fallback, exhausted or inactive Claude windows must show unknown")
+        let renewed = ClaudeRateLimitSnapshot.Window(usedPercent: 0,
+            resetsAt: future.addingTimeInterval(300).timeIntervalSince1970)
+        let resumed = claudeGauge(renewed, weekly, at: future)
+        try check(resumed.usedPercent == 0 && resumed.limit?.windowDurationMinutes == 300,
+                  "A newly received active 5-hour window must replace the weekly fallback")
+
         let image = MenuBarGaugeImage.make(gauges: [codex], showsPercent: true)
         let unchanged = MenuBarGaugeImage.make(gauges: [codex], showsPercent: true)
         try check(image === unchanged,

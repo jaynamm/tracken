@@ -48,7 +48,9 @@ struct MenuBarUsageLabel: View {
             return L10n.format("%@: %@ used (%@)", gauge.provider.shortName,
                                Format.percent(limit.usedPercent), window)
         }
-        return (["tracken"] + rows + [L10n.text("Shows the highest usage among each provider's current subscription limits.")])
+        return (["tracken"] + rows + [
+            L10n.text("Codex shows the highest current usage. Claude prefers an active 5-hour limit below 100%; otherwise, it uses the 7-day limit.")
+        ])
             .joined(separator: "\n")
     }
 }

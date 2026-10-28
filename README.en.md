@@ -257,7 +257,14 @@ Choose **Settings → Menu bar → Gauge layout → Vertical / Horizontal** to a
 
 The horizontal layout uses larger text and thicker bars; the vertical layout fits both rows into less space. Percentages use fixed-width columns so changing values do not shift the layout. The monochrome icon and gauges adapt to light and dark menu bars.
 
-Each gauge shows the **highest usage percentage** among that provider's current short-term and weekly limits. Hover to see the selected limit window. Missing or expired limits appear as `—`, distinct from actual 0% usage. Values follow activity-aware automatic or manual refresh. Opening the menu rechecks limits when the previous attempt was over a minute ago; expiry is checked every 30 seconds.
+Each provider selects the displayed window as follows:
+
+- **Codex:** Shows the highest usage percentage among its valid, unexpired short-term and weekly limits.
+- **Claude:** **Prefers the 5-hour usage when that window has been received, is valid and unexpired, and is below 100%.** It keeps showing the 5-hour window even if weekly usage is higher. It **switches to 7-day usage when the 5-hour window reaches 100%, is missing, or has expired**. A new eligible 5-hour window switches the gauge back automatically. A valid 0% value also counts as active.
+
+For example, with 5-hour usage at 30% and 7-day usage at 80%, Claude's gauge shows 30%. Once 5-hour usage reaches 100%, it switches to the weekly 80%. If no eligible window is available, it shows `—`; this also applies when 5-hour usage is 100% and the weekly window is missing or expired.
+
+Hover to see the selected limit window. This selection applies to the top menu bar gauge; the popover and Claude detail view display both windows separately. Values follow activity-aware automatic or manual refresh. Opening the menu rechecks limits when the previous attempt was over a minute ago; expiry is checked every 30 seconds.
 
 Click the tracken icon or gauges in the macOS menu bar to open the popover:
 

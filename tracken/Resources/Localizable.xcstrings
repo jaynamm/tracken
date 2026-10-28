@@ -880,6 +880,23 @@
         }
       }
     },
+    "Codex shows the highest current usage. Claude prefers an active 5-hour limit below 100%; otherwise, it uses the 7-day limit.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex shows the highest current usage. Claude prefers an active 5-hour limit below 100%; otherwise, it uses the 7-day limit."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex는 현재 가장 높은 사용률을 표시합니다. Claude는 활성 상태이고 100% 미만인 5시간 한도를 우선하며, 그 외에는 7일 한도를 표시합니다."
+          }
+        }
+      }
+    },
     "Codex subscription limits": {
       "localizations": {
         "en": {
@@ -3081,23 +3098,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "설정"
-          }
-        }
-      }
-    },
-    "Shows the highest usage among each provider's current subscription limits.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shows the highest usage among each provider's current subscription limits."
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "공급자별로 현재 유효한 구독 한도 중 사용률이 가장 높은 값을 표시합니다."
           }
         }
       }

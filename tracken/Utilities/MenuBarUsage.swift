@@ -56,10 +56,12 @@ nonisolated struct MenuBarUsageGauge: Equatable, Sendable {
             (snapshot?.fiveHour, 300), (snapshot?.sevenDay, 10_080)
         ]
         let limits = windows.compactMap { window, minutes -> CodexRateLimit? in
-            guard let window, window.isValid else { return nil }
+            guard let window, window.isValid, !window.hasExpired(at: now) else { return nil }
+            if minutes == 300 && window.usedPercent >= 100 { return nil }
             return CodexRateLimit(usedPercent: window.usedPercent, windowDurationMinutes: minutes,
                                   resetsAt: Date(timeIntervalSince1970: window.resetsAt))
         }
-        return Self(provider: .anthropic, limits: limits, now: now)
+        // Prefer an active 5-hour window below 100%; otherwise use the weekly window.
+        return Self(provider: .anthropic, limits: Array(limits.prefix(1)), now: now)
     }
 }

@@ -112,7 +112,7 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             .disabled(settings.menuBarDisplayStyle == .iconOnly)
-            Text("Shows the highest usage among each provider's current subscription limits.")
+            Text("Codex shows the highest current usage. Claude prefers an active 5-hour limit below 100%; otherwise, it uses the 7-day limit.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text("Gauges show the percentage used. Missing or expired limits appear as —. Refresh frequency is managed in Connection status.")
