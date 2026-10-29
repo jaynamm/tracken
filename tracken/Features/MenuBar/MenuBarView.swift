@@ -33,7 +33,8 @@ struct MenuBarView: View {
             footer
         }
         .padding(14)
-        .frame(width: 360)
+        .frame(width: 460)
+        .fixedSize(horizontal: false, vertical: true)
         .environment(\.locale, AppSettings.shared.language.locale)
         .task { await store.menuDidOpen() }
         .sheet(isPresented: $showingSettings) {
