@@ -31,6 +31,35 @@ private actor PricingHTTPFixture {
         let officialOpenAIText = try String(contentsOf: fixtureURL.deletingLastPathComponent()
             .appendingPathComponent("openai-pricing-2026-10-28.md"), encoding: .utf8)
         let officialOpenAI = try OfficialPricingParser.parse(officialOpenAIText, provider: .codex)
+        let currentOpenAIText = try String(contentsOf: fixtureURL.deletingLastPathComponent()
+            .appendingPathComponent("openai-pricing-2026-11-11.md"), encoding: .utf8)
+        let currentOpenAI = try OfficialPricingParser.parse(currentOpenAIText, provider: .codex)
+        try checkPrice(currentOpenAI.count == 28
+                       && currentOpenAI.allSatisfy { officialOpenAI[$0.key] == $0.value }
+                       && currentOpenAI["gpt-5.3-codex"] == TokenPrice(input: 1.75, cachedInput: 0.175,
+                                                                     cacheWrite: nil, output: 14),
+                       "Current specialized table accepts cache-write columns without importing other categories or Fast prices")
+        let groupedCacheWrites = """
+        ### Standard pricing data
+        | Model | Input | Output | Cached input |
+        | --- | --- | --- | --- |
+        | gpt-6.1-sol | $2.00 | $10.00 | $0.10 |
+        Specialized models
+        Standard
+        ### Grouped Pricing Table data
+        | 12h write | Category | Cached input | Model | 30m write | Output | Input |
+        | --- | --- | --- | --- | --- | --- | --- |
+        | $5.00 | Codex | $0.175 | gpt-5.3-codex | $2.50 | $14.00 | $1.75 |
+        Fast
+        ### Grouped Pricing Table data
+        | Category | Model | Input | Output | Cached input |
+        | --- | --- | --- | --- | --- |
+        | Codex | gpt-5.3-codex | $3.50 | $28.00 | $0.35 |
+        """
+        let groupedRate = try OfficialPricingParser.parse(groupedCacheWrites, provider: .codex)["gpt-5.3-codex"]
+        try checkPrice(groupedRate?.input == 1.75 && groupedRate?.output == 14
+                       && groupedRate?.cacheWrite == 2.5 && groupedRate?.cacheWrite12h == 5,
+                       "Reordered specialized columns preserve the distinct cache-write lifetimes")
         try checkPrice(officialOpenAI == openAI && openAI.count == 38,
                        "Bundled OpenAI prices match all standard tables in the actual Markdown response")
         try checkPrice(openAI["gpt-6.1-sol"]?.input == 2 && openAI["gpt-6.1-sol"]?.cachedInput == 0.1
@@ -85,6 +114,9 @@ private actor PricingHTTPFixture {
         try checkPrice(snapshot.rate(for: "gpt-5.6-sol-2026-09-01") != nil && snapshot.rate(for: "gpt-5.6-sol-pro") == nil,
                        "Only dated aliases inherit model rates")
         for broken in ["<html>blocked</html>", PricingDefaults.openAI.replacingOccurrences(of: "$4.00", with: "$NaN"),
+                       currentOpenAIText.replacingOccurrences(of: "| 30m write |", with: "| Price per 1000 tokens |"),
+                       currentOpenAIText.replacingOccurrences(of: "$0.175 | - | - |", with: "$0.175 | $NaN | - |"),
+                       groupedCacheWrites.replacingOccurrences(of: "| 12h write |", with: "| Input |"),
                        officialOpenAIText.replacingOccurrences(of: "Short context output", with: "Price per 1000 tokens"),
                        officialOpenAIText.replacingOccurrences(of: "| gpt-6.1-sol | $2.00 |", with: "| gpt-6.1-sol | - |"),
                        officialOpenAIText.replacingOccurrences(of: "$0.125", with: "$NaN"),
@@ -139,6 +171,16 @@ private actor PricingHTTPFixture {
                        && refreshedClaude.rates["claude-opus-5-5"]?.input == 4,
                        "The raw Claude HTTP response validates and persists independently of Codex prices")
         try checkPrice(await catalog.error(for: .anthropic) == nil, "Valid Claude footnotes do not leave a refresh error")
+        await http.set(status: 200, document: currentOpenAIText)
+        try checkPrice(await catalog.refresh(.codex, force: true), "Current OpenAI response refreshes a saved catalog")
+        let refreshedOpenAI = await catalog.snapshot(for: .codex)
+        try checkPrice(!refreshedOpenAI.isBundled && refreshedOpenAI.rates == currentOpenAI
+                       && refreshedOpenAI.checkedAt > unchanged.checkedAt,
+                       "Current OpenAI prices and verification time replace the stale cache")
+        try checkPrice(await catalog.error(for: .codex) == nil, "Successful OpenAI refresh clears the previous error")
+        let reloaded = PricingCatalog(directory: root)
+        try checkPrice(await reloaded.snapshot(for: .codex) == refreshedOpenAI,
+                       "Current OpenAI prices persist across app restarts")
         try Data("broken cache".utf8).write(to: root.appendingPathComponent("codex.json"))
         let recovered = PricingCatalog(directory: root)
         try checkPrice(await recovered.snapshot(for: .codex).isBundled, "Corrupt disk cache falls back to bundled prices")

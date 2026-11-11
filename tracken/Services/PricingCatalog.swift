@@ -172,8 +172,12 @@ nonisolated enum OfficialPricingParser {
             for line in section where line.hasPrefix("|") {
                 let cells = line.split(separator: "|", omittingEmptySubsequences: false).dropFirst().dropLast()
                     .map { $0.trimmingCharacters(in: .whitespaces) }
-                if cells.first == (grouped ? "Category" : "Model") {
-                    let supported = grouped ? [["Category"] + basic] : [basic, legacy, current]
+                if cells.contains(grouped ? "Category" : "Model") {
+                    // Specialized tables now include cache-write lifetimes too.
+                    // Match validated column names so their order does not matter.
+                    let supported = grouped ? [["Category"] + basic,
+                                               ["Category"] + basic + ["30m write", "12h write"]]
+                                            : [basic, legacy, current]
                     guard supported.contains(where: { Set($0) == Set(cells) && $0.count == cells.count }) else {
                         throw PricingError.invalidDocument
                     }
